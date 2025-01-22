@@ -1,0 +1,23 @@
+{
+    "timestamp": "2025-01-22T04:43:12.465211",
+    "crypto": "BTC",
+    "price_analysis": {
+        "trend": "unknown",
+        "strength": "unknown",
+        "analysis": "No price data available for analysis",
+        "indicators": {
+            "sma_20": null,
+            "sma_50": null,
+            "rsi": null,
+            "macd": null,
+            "macd_signal": null
+        }
+    },
+    "news_sentiment": "positive",
+    "social_data": {
+        "reddit": [
+            {
+                "title": "Amen! \ud83d\ude4f\ud83c\udffb",
+                "score": 44286,
+                "num_comments": 1624,
+                "created_utc": 

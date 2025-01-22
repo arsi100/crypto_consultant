@@ -57,19 +57,19 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         current_signal = signal.iloc[-1]
 
         # Determine trend and momentum
-        trend_strength = 'strong' if abs(current_price - current_sma_20) / current_sma_20 > 0.02 else 'moderate'
-
-        if pd.isna(current_sma_20) or pd.isna(current_sma_50):
-            trend = 'unknown'
-        else:
-            trend = 'bullish' if current_price > current_sma_20 > current_sma_50 else 'bearish' if current_price < current_sma_20 < current_sma_50 else 'sideways'
-
-        # Generate analysis text
         try:
             price_change = ((current_price - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
         except (IndexError, ZeroDivisionError):
             price_change = 0
 
+        if pd.isna(current_sma_20) or pd.isna(current_sma_50):
+            trend = 'unknown'
+            trend_strength = 'unknown'
+        else:
+            trend_strength = 'strong' if abs(current_price - current_sma_20) / current_sma_20 > 0.02 else 'moderate'
+            trend = 'bullish' if current_price > current_sma_20 > current_sma_50 else 'bearish' if current_price < current_sma_20 < current_sma_50 else 'sideways'
+
+        # Generate analysis text
         analysis = f"Price is showing a {trend_strength} {trend} trend"
         if price_change != 0:
             analysis += f" with {abs(price_change):.2f}% {'increase' if price_change > 0 else 'decrease'}"
@@ -88,7 +88,7 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
             else:
                 analysis += ". MACD suggests momentum may be weakening"
 
-        # Calculate support and resistance levels using recent price action
+        # Calculate support and resistance levels
         try:
             window = min(len(price_data), 20)  # Use last 20 periods or all available data
             recent_prices = price_data.tail(window)
@@ -97,7 +97,7 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         except Exception:
             support = resistance = None
 
-        return {
+        result = {
             'trend': trend,
             'trend_strength': trend_strength,
             'indicators': {
@@ -114,6 +114,13 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
             'analysis': analysis,
             'price_change_percent': round(price_change, 2)
         }
+
+        # Ensure all required fields are present
+        for key in default_response:
+            if key not in result:
+                result[key] = default_response[key]
+
+        return result
 
     except Exception as e:
         print(f"Error in price analysis: {str(e)}")
