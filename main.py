@@ -17,7 +17,7 @@ st.set_page_config(page_title="Crypto Research Assistant", layout="wide")
 def main():
     st.title("🤖 AI Crypto Research Assistant")
 
-    # Sidebar controls remain unchanged
+    # Sidebar controls
     st.sidebar.title("Controls")
     crypto = st.sidebar.selectbox(
         "Select Cryptocurrency",
@@ -29,54 +29,63 @@ def main():
         ["24h", "7d", "30d"]
     )
 
+    # Add status indicators
+    st.sidebar.markdown("### API Status")
+
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Price Analysis")
-        try:
-            prices = get_crypto_prices(crypto, timeframe)
-            if not prices.empty:
-                # Create price chart
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(
-                    x=prices['timestamp'],
-                    open=prices['open'],
-                    high=prices['high'],
-                    low=prices['low'],
-                    close=prices['close']
-                ))
-                st.plotly_chart(fig, use_container_width=True)
+        with st.spinner('Fetching price data...'):
+            try:
+                prices = get_crypto_prices(crypto, timeframe)
+                if not prices.empty:
+                    # Create price chart
+                    fig = go.Figure()
+                    fig.add_trace(go.Candlestick(
+                        x=prices['timestamp'],
+                        open=prices['open'],
+                        high=prices['high'],
+                        low=prices['low'],
+                        close=prices['close']
+                    ))
+                    fig.update_layout(
+                        title=f"{crypto} Price Chart ({timeframe})",
+                        yaxis_title="Price (USD)",
+                        xaxis_title="Time"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
-                # Show trend analysis
-                trends = analyze_price_trends(prices)
-                st.markdown("### Trend Analysis")
-                st.write(trends)
-            else:
-                st.error("Unable to fetch price data. CoinGecko API may be rate limited. Please try again in a minute.")
-        except Exception as e:
-            st.error(f"Error in price analysis: {str(e)}")
+                    # Show trend analysis
+                    trends = analyze_price_trends(prices)
+                    st.markdown("### Trend Analysis")
+                    st.write(trends)
+                else:
+                    st.error("Unable to fetch price data. CoinGecko API may be rate limited. Please try again in a minute.")
+            except Exception as e:
+                st.error(f"Error in price analysis: {str(e)}")
 
     with col2:
         st.subheader("News & Sentiment")
-        if not os.environ.get('NEWS_API_KEY'):
-            st.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
-        else:
-            news = get_crypto_news(crypto)
-            if news:
-                sentiment = analyze_sentiment(news)
-                st.markdown("### Latest News")
-                for item in news[:5]:
-                    st.markdown(f"**{item['title']}**")
-                    st.markdown(f"_{item['summary']}_")
-                    sentiment_color = (
-                        "🟢" if item['sentiment'] == 'positive' 
-                        else "🔴" if item['sentiment'] == 'negative' 
-                        else "⚪"
-                    )
-                    st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
-                    st.markdown("---")
+        with st.spinner('Fetching news...'):
+            if not os.environ.get('NEWS_API_KEY'):
+                st.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
             else:
-                st.warning("No recent news found for this cryptocurrency.")
+                news = get_crypto_news(crypto)
+                if news:
+                    sentiment = analyze_sentiment(news)
+                    st.markdown("### Latest News")
+                    for item in news[:5]:
+                        with st.expander(item['title']):
+                            st.markdown(f"_{item['summary']}_")
+                            sentiment_color = (
+                                "🟢" if item['sentiment'] == 'positive' 
+                                else "🔴" if item['sentiment'] == 'negative' 
+                                else "⚪"
+                            )
+                            st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
+                else:
+                    st.warning("No recent news found for this cryptocurrency.")
 
     # Social Media Analysis
     st.subheader("Social Media Insights")
