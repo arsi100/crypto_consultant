@@ -340,49 +340,85 @@ def main():
 
         # Generate and store daily report
         if st.button("Generate Daily Report"):
-            logger.info("Starting report generation...")
-            with st.spinner('Generating report...'):
+            try:
+                logger.info("Starting report generation...")
+
+                # Create a progress bar
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                # Validate required data
+                if not st.session_state.trends:
+                    logger.error("No price analysis data available for report")
+                    st.error("No price analysis data available. Please wait for data to load.")
+                    return
+
+                # Step 1: Prepare report data (25%)
+                status_text.text("Preparing report data...")
+                report_data = {
+                    'timestamp': datetime.now(),
+                    'crypto': crypto,
+                    'price_analysis': {
+                        'trend': st.session_state.trends.get('trend', 'unknown'),
+                        'strength': st.session_state.trends.get('trend_strength', 'unknown'),
+                        'analysis': st.session_state.trends.get('analysis', 'No analysis available'),
+                        'indicators': st.session_state.trends.get('indicators', {})
+                    },
+                    'news_sentiment': st.session_state.sentiment.get('overall', 'neutral'),
+                    'news_items': [
+                        {
+                            'title': item.get('title', ''),
+                            'sentiment': item.get('sentiment', 'neutral'),
+                            'summary': item.get('summary', '')
+                        }
+                        for item in (st.session_state.news[:5] if st.session_state.news else [])
+                    ]
+                }
+                progress_bar.progress(25)
+
+                # Step 2: Serialize data (50%)
+                status_text.text("Processing report data...")
                 try:
-                    if not st.session_state.trends:
-                        logger.error("No price analysis data available for report")
-                        st.error("No price analysis data available. Please wait for data to load.")
-                        return
-
-                    report_data = {
-                        'timestamp': datetime.now(),
-                        'crypto': crypto,
-                        'price_analysis': {
-                            'trend': st.session_state.trends.get('trend', 'unknown'),
-                            'strength': st.session_state.trends.get('trend_strength', 'unknown'),
-                            'analysis': st.session_state.trends.get('analysis', 'No analysis available'),
-                            'indicators': st.session_state.trends.get('indicators', {})
-                        },
-                        'news_sentiment': st.session_state.sentiment.get('overall', 'neutral'),
-                        'news_items': [
-                            {
-                                'title': item.get('title', ''),
-                                'sentiment': item.get('sentiment', 'neutral'),
-                                'summary': item.get('summary', '')
-                            }
-                            for item in st.session_state.news[:5]
-                        ] if st.session_state.news else []
-                    }
-
                     logger.info("Converting report data to JSON...")
                     serialized_data = json.loads(json.dumps(report_data, default=json_serial))
+                    progress_bar.progress(50)
+                except Exception as e:
+                    logger.error(f"Error serializing report data: {str(e)}")
+                    st.error("Error processing report data. Please try again.")
+                    return
 
+                # Step 3: Store analysis results (75%)
+                status_text.text("Storing analysis results...")
+                try:
                     logger.info("Storing analysis results...")
                     store_analysis_results(serialized_data)
+                    progress_bar.progress(75)
+                except Exception as e:
+                    logger.error(f"Error storing analysis results: {str(e)}")
+                    st.warning("Could not store analysis results, but continuing with report generation...")
 
+                # Step 4: Send report (100%)
+                status_text.text("Sending report...")
+                try:
                     logger.info("Sending daily report...")
                     send_daily_report(serialized_data)
-
-                    logger.info("Report generated and sent successfully")
-                    st.success("Daily report generated and sent successfully!")
-
+                    progress_bar.progress(100)
                 except Exception as e:
-                    logger.error(f"Error in report generation: {str(e)}", exc_info=True)
-                    st.error(f"Error generating report: {str(e)}")
+                    logger.error(f"Error sending report: {str(e)}")
+                    st.error(f"Error sending report: {str(e)}")
+                    return
+
+                # Clear progress indicators
+                progress_bar.empty()
+                status_text.empty()
+
+                logger.info("Report generated and sent successfully")
+                st.success("Daily report generated and sent successfully!")
+
+            except Exception as e:
+                logger.error(f"Error in report generation: {str(e)}", exc_info=True)
+                st.error(f"Error generating report: {str(e)}")
+                st.info("Please check your network connection and try again. If the error persists, contact support.")
 
     except Exception as e:
         logger.error(f"Main application error: {str(e)}", exc_info=True)
