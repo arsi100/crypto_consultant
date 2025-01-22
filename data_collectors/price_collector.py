@@ -17,9 +17,17 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
     }
 
     coin_id = symbol_map.get(symbol.upper(), symbol.lower())
+    base_url = "https://api.coingecko.com/api/v3"
 
-    # CoinGecko free API endpoint
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    # Test API status first
+    try:
+        ping_response = requests.get(f"{base_url}/ping")
+        if ping_response.status_code != 200:
+            print("CoinGecko API appears to be unavailable")
+            return pd.DataFrame()
+    except Exception as e:
+        print(f"Error checking CoinGecko API status: {e}")
+        return pd.DataFrame()
 
     # Calculate days parameter
     days = '1' if timeframe == "24h" else '7' if timeframe == "7d" else '30'
@@ -32,7 +40,7 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
 
     headers = {
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (compatible; CryptoResearchAssistant/1.0)'
+        'User-Agent': 'Mozilla/5.0 (compatible; CryptoResearchBot/1.0)'
     }
 
     # Try up to 3 times with exponential backoff
@@ -42,11 +50,17 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
     for attempt in range(max_retries):
         try:
             print(f"Fetching price data for {coin_id}, attempt {attempt + 1}/{max_retries}")
-            response = requests.get(url, params=params, headers=headers)
+
+            response = requests.get(
+                f"{base_url}/coins/{coin_id}/market_chart",
+                params=params,
+                headers=headers,
+                timeout=10
+            )
 
             if response.status_code == 429:
                 wait_time = retry_delay * (2 ** attempt)
-                print(f"Rate limited, waiting {wait_time} seconds before retry...")
+                print(f"Rate limited, waiting {wait_time} seconds...")
                 time.sleep(wait_time)
                 continue
 
@@ -54,7 +68,7 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
             data = response.json()
 
             if 'prices' not in data:
-                print(f"Unexpected API response: missing 'prices' key")
+                print("No price data available")
                 return pd.DataFrame()
 
             # Create DataFrame with timestamp and price
