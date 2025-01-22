@@ -151,11 +151,41 @@ def main():
                         if st.session_state.trends['indicators']['rsi'] is not None:
                             st.write("**RSI:**", st.session_state.trends['indicators']['rsi'])
                         if st.session_state.trends['support_resistance']['support'] is not None:
-                            st.write("**Support Level:**", st.session_state.trends['support_resistance']['support'])
+                            st.write("**Support Level:**", f"${st.session_state.trends['support_resistance']['support']:,.2f}")
                         if st.session_state.trends['support_resistance']['resistance'] is not None:
-                            st.write("**Resistance Level:**", st.session_state.trends['support_resistance']['resistance'])
+                            st.write("**Resistance Level:**", f"${st.session_state.trends['support_resistance']['resistance']:,.2f}")
 
                     st.write("**Analysis:**", st.session_state.trends['analysis'])
+
+                    # Add pattern recognition results
+                    if st.session_state.trends['patterns']:
+                        st.markdown("### Pattern Recognition")
+                        for pattern in st.session_state.trends['patterns']:
+                            with st.expander(f"{pattern['type'].replace('_', ' ').title()} Pattern"):
+                                st.write("**Description:**", pattern['description'])
+                                st.write("**Confidence:**", f"{pattern['confidence']*100:.0f}%")
+                                if 'support' in pattern:
+                                    st.write("**Support Level:**", f"${pattern['support']:,.2f}")
+                                if 'resistance' in pattern:
+                                    st.write("**Resistance Level:**", f"${pattern['resistance']:,.2f}")
+
+                    # Add Bollinger Bands info if available
+                    if st.session_state.trends['bollinger_bands']:
+                        bb = st.session_state.trends['bollinger_bands']
+                        st.markdown("### Technical Indicators")
+                        col_bb1, col_bb2 = st.columns(2)
+
+                        with col_bb1:
+                            st.write("**Bollinger Bands:**")
+                            st.write(f"Upper: ${bb['upper']:,.2f}")
+                            st.write(f"Middle: ${bb['middle']:,.2f}")
+                            st.write(f"Lower: ${bb['lower']:,.2f}")
+
+                        with col_bb2:
+                            st.write("**Band Analysis:**")
+                            st.write(f"Bandwidth: {bb['bandwidth']:.1f}%")
+                            if bb['squeeze']:
+                                st.write("🔄 Bollinger Squeeze Detected")
 
             except Exception as e:
                 logger.error(f"Error in price analysis section: {str(e)}", exc_info=True)
