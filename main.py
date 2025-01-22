@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
+import os
 
 from data_collectors.price_collector import get_crypto_prices
 from data_collectors.news_collector import get_crypto_news
@@ -16,7 +17,7 @@ st.set_page_config(page_title="Crypto Research Assistant", layout="wide")
 def main():
     st.title("🤖 AI Crypto Research Assistant")
 
-    # Sidebar
+    # Sidebar controls remain unchanged
     st.sidebar.title("Controls")
     crypto = st.sidebar.selectbox(
         "Select Cryptocurrency",
@@ -28,55 +29,62 @@ def main():
         ["24h", "7d", "30d"]
     )
 
-    # Main content area
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Price Analysis")
-        prices = get_crypto_prices(crypto, timeframe)
+        try:
+            prices = get_crypto_prices(crypto, timeframe)
+            if not prices.empty:
+                # Create price chart
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(
+                    x=prices['timestamp'],
+                    open=prices['open'],
+                    high=prices['high'],
+                    low=prices['low'],
+                    close=prices['close']
+                ))
+                st.plotly_chart(fig, use_container_width=True)
 
-        if not prices.empty:
-            # Create price chart
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(
-                x=prices['timestamp'],
-                open=prices['open'],
-                high=prices['high'],
-                low=prices['low'],
-                close=prices['close']
-            ))
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Show trend analysis
-            trends = analyze_price_trends(prices)
-            st.markdown("### Trend Analysis")
-            st.write(trends)
-        else:
-            st.error("Unable to fetch price data. Please try again later.")
+                # Show trend analysis
+                trends = analyze_price_trends(prices)
+                st.markdown("### Trend Analysis")
+                st.write(trends)
+            else:
+                st.error("Unable to fetch price data. CoinGecko API may be rate limited. Please try again in a minute.")
+        except Exception as e:
+            st.error(f"Error in price analysis: {str(e)}")
 
     with col2:
         st.subheader("News & Sentiment")
-        news = get_crypto_news(crypto)
-
-        if news:
-            sentiment = analyze_sentiment(news)
-
-            st.markdown("### Latest News")
-            for item in news[:5]:
-                st.markdown(f"**{item['title']}**")
-                st.markdown(f"_{item['summary']}_")
-                sentiment_color = (
-                    "🟢" if item['sentiment'] == 'positive' 
-                    else "🔴" if item['sentiment'] == 'negative' 
-                    else "⚪"
-                )
-                st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
-                st.markdown("---")
+        if not os.environ.get('NEWS_API_KEY'):
+            st.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
         else:
-            st.warning("No recent news found for this cryptocurrency.")
+            news = get_crypto_news(crypto)
+            if news:
+                sentiment = analyze_sentiment(news)
+                st.markdown("### Latest News")
+                for item in news[:5]:
+                    st.markdown(f"**{item['title']}**")
+                    st.markdown(f"_{item['summary']}_")
+                    sentiment_color = (
+                        "🟢" if item['sentiment'] == 'positive' 
+                        else "🔴" if item['sentiment'] == 'negative' 
+                        else "⚪"
+                    )
+                    st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
+                    st.markdown("---")
+            else:
+                st.warning("No recent news found for this cryptocurrency.")
 
     # Social Media Analysis
     st.subheader("Social Media Insights")
+
+    # Check for Reddit credentials
+    if not (os.environ.get('REDDIT_CLIENT_ID') and os.environ.get('REDDIT_CLIENT_SECRET')):
+        st.warning("Reddit API credentials are missing. Please add your Reddit Client ID and Secret to enable social media analysis.")
+
     social_data = get_social_data(crypto)
 
     col3, col4 = st.columns(2)

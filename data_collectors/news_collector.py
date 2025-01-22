@@ -13,7 +13,7 @@ def get_crypto_news(symbol: str) -> List[Dict]:
     # Get API key from environment
     api_key = os.environ.get('NEWS_API_KEY')
     if not api_key:
-        print("NewsAPI key not found in environment variables")
+        print("NewsAPI key not found in environment variables. Please provide a NewsAPI key.")
         return []
 
     # NewsAPI endpoint
@@ -32,7 +32,10 @@ def get_crypto_news(symbol: str) -> List[Dict]:
 
         # Handle rate limiting and errors
         if response.status_code == 429:
-            print("NewsAPI rate limit reached")
+            print("NewsAPI rate limit reached. Please try again later.")
+            return []
+        elif response.status_code == 401:
+            print("Invalid NewsAPI key. Please check your API key.")
             return []
 
         response.raise_for_status()
@@ -43,7 +46,6 @@ def get_crypto_news(symbol: str) -> List[Dict]:
             return []
 
         for article in data.get('articles', []):
-            # Extract clean text content if URL is available
             content = article['description']
             if article['url']:
                 try:

@@ -34,6 +34,7 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
 
         # Handle rate limiting
         if response.status_code == 429:
+            print("CoinGecko API rate limit reached. Please try again in a minute.")
             return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
 
         response.raise_for_status()
@@ -52,6 +53,12 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
         ohlc = df.set_index('timestamp').price.resample(interval).ohlc().fillna(method='ffill')
         return ohlc.reset_index()
 
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 401:
+            print("CoinGecko API authentication error. Service might require an API key.")
+        else:
+            print(f"HTTP error occurred: {e}")
+        return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
     except Exception as e:
         print(f"Error fetching price data: {e}")
         return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close'])
