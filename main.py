@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
 import os
+import time
 
 from data_collectors.price_collector import get_crypto_prices
 from data_collectors.news_collector import get_crypto_news
@@ -12,7 +13,32 @@ from analysis.sentiment_analyzer import analyze_sentiment
 from utils.email_sender import send_daily_report
 from utils.data_storage import store_analysis_results
 
-st.set_page_config(page_title="Crypto Research Assistant", layout="wide")
+# Configure Streamlit page
+st.set_page_config(
+    page_title="Crypto Research Assistant",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize session state for data persistence
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
+    st.session_state.chat_input = ""
+    st.session_state.last_update = None
+    st.session_state.error_count = 0
+    st.session_state.max_retries = 3
+
+def initialize_app():
+    """Initialize the application and handle any startup requirements"""
+    try:
+        if not st.session_state.initialized:
+            # Any initialization code here
+            st.session_state.initialized = True
+            st.session_state.last_update = datetime.now()
+            return True
+    except Exception as e:
+        st.error(f"Error initializing application: {str(e)}")
+        return False
 
 def main():
     st.title("🤖 AI Crypto Research Assistant")
@@ -221,4 +247,8 @@ def main():
                 print(f"Report generation error: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        st.error(f"Application error: {str(e)}")
+        st.info("Please try refreshing the page. If the error persists, contact support.")
