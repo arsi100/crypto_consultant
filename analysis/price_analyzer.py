@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Dict
+import time
 
 def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
     """
@@ -24,12 +25,23 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         'price_change_percent': 0.0
     }
 
+    # Validate input data
+    if price_data is None or not isinstance(price_data, pd.DataFrame):
+        print("Invalid price data format")
+        return default_response
+
     if price_data.empty or len(price_data) < 2:  # Need at least 2 points for analysis
+        print("Insufficient price data points")
         return default_response
 
     try:
         # Calculate basic technical indicators
         close_prices = price_data['close']
+
+        # Ensure we have numeric data
+        if not pd.to_numeric(close_prices, errors='coerce').notna().all():
+            print("Non-numeric values found in close prices")
+            return default_response
 
         # Simple Moving Averages
         sma_20 = close_prices.rolling(window=min(20, len(close_prices))).mean()
@@ -39,7 +51,7 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         delta = close_prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=min(14, len(close_prices))).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=min(14, len(close_prices))).mean()
-        rs = gain / loss
+        rs = gain / loss.replace(0, np.inf)  # Handle division by zero
         rsi = 100 - (100 / (1 + rs))
 
         # MACD
@@ -60,14 +72,21 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         try:
             price_change = ((current_price - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
         except (IndexError, ZeroDivisionError):
+            print("Error calculating price change")
             price_change = 0
 
-        if pd.isna(current_sma_20) or pd.isna(current_sma_50):
-            trend = 'unknown'
-            trend_strength = 'unknown'
-        else:
+        # Default to unknown if moving averages are not available
+        trend = 'unknown'
+        trend_strength = 'unknown'
+
+        if not pd.isna(current_sma_20) and not pd.isna(current_sma_50):
             trend_strength = 'strong' if abs(current_price - current_sma_20) / current_sma_20 > 0.02 else 'moderate'
-            trend = 'bullish' if current_price > current_sma_20 > current_sma_50 else 'bearish' if current_price < current_sma_20 < current_sma_50 else 'sideways'
+            if current_price > current_sma_20 > current_sma_50:
+                trend = 'bullish'
+            elif current_price < current_sma_20 < current_sma_50:
+                trend = 'bearish'
+            else:
+                trend = 'sideways'
 
         # Generate analysis text
         analysis = f"Price is showing a {trend_strength} {trend} trend"
@@ -94,7 +113,8 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
             recent_prices = price_data.tail(window)
             support = recent_prices['low'].nlargest(3).mean()  # Average of 3 highest lows
             resistance = recent_prices['high'].nsmallest(3).mean()  # Average of 3 lowest highs
-        except Exception:
+        except Exception as e:
+            print(f"Error calculating support/resistance: {str(e)}")
             support = resistance = None
 
         result = {

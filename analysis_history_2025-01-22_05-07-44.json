@@ -1,0 +1,219 @@
+{
+    "timestamp": "2025-01-22T05:07:44.586398",
+    "crypto": "BTC",
+    "price_analysis": {
+        "trend": "unknown",
+        "strength": "unknown",
+        "analysis": "No price data available for analysis",
+        "indicators": {
+            "sma_20": null,
+            "sma_50": null,
+            "rsi": null,
+            "macd": null,
+            "macd_signal": null
+        }
+    },
+    "news_sentiment": "positive",
+    "social_data": {
+        "reddit": [
+            {
+                "title": "Amen! \ud83d\ude4f\ud83c\udffb",
+                "score": 44966,
+                "num_comments": 1640,
+                "created_utc": "2025-01-21T18:52:44",
+                "sentiment": 0
+            },
+            {
+                "title": "Because f**k the poor and old people",
+                "score": 2097,
+                "num_comments": 113,
+                "created_utc": "2025-01-21T07:26:50",
+                "sentiment": 0
+            },
+            {
+                "title": "Because f**k poor and old people",
+                "score": 1873,
+                "num_comments": 74,
+                "created_utc": "2025-01-21T07:25:31",
+                "sentiment": 0
+            },
+            {
+                "title": "MicroStrategy purchases another 11,000 BTC at $101,191 per Bitcoin",
+                "score": 935,
+                "num_comments": 117,
+                "created_utc": "2025-01-21T13:20:38",
+                "sentiment": 0
+            },
+            {
+                "title": "Stay calm, there are no new developments.",
+                "score": 767,
+                "num_comments": 94,
+                "created_utc": "2025-01-21T22:17:18",
+                "sentiment": 0
+            },
+            {
+                "title": "For those Hispanic viejitos in Miami, who are dependent on Medicaid/Medicare and voted for this, congratulations !!!",
+                "score": 654,
+                "num_comments": 144,
+                "created_utc": "2025-01-21T11:25:31",
+                "sentiment": 0
+            },
+            {
+                "title": "It has happened! What do you think?",
+                "score": 421,
+                "num_comments": 107,
+                "created_utc": "2025-01-21T13:07:45",
+                "sentiment": 0
+            },
+            {
+                "title": "Amen! \ud83d\ude4f\ud83c\udffb ",
+                "score": 390,
+                "num_comments": 79,
+                "created_utc": "2025-01-21T19:40:41",
+                "sentiment": 0
+            },
+            {
+                "title": "Didn't take long to start screwing the poor",
+                "score": 341,
+                "num_comments": 49,
+                "created_utc": "2025-01-21T15:11:05",
+                "sentiment": 0
+            },
+            {
+                "title": "XRP Market Cap to Price ",
+                "score": 254,
+                "num_comments": 129,
+                "created_utc": "2025-01-21T04:56:28",
+                "sentiment": 0
+            },
+            {
+                "title": "MicroStrategy Buys $1.1 Billion of Bitcoin Before Share Vote (today)",
+                "score": 201,
+                "num_comments": 73,
+                "created_utc": "2025-01-21T16:32:33",
+                "sentiment": 0
+            },
+            {
+                "title": "Coinbase CEO Brian Armstrong: A Strategic Bitcoin Reserve in the US Could Spark a G20 Gold Standard Revolution",
+                "score": 174,
+                "num_comments": 73,
+                "created_utc": "2025-01-21T22:28:59",
+                "sentiment": 0
+            },
+            {
+                "title": "Trump announces full and unconditional pardon for Ross Ulbricht.",
+                "score": 172,
+                "num_comments": 61,
+                "created_utc": "2025-01-22T00:10:08",
+                "sentiment": 0
+            },
+            {
+                "title": "Here we go again ! 11k BTC last week ! Wow !",
+                "score": 160,
+                "num_comments": 23,
+                "created_utc": "2025-01-21T13:04:11",
+                "sentiment": 0
+            },
+            {
+                "title": "Please keep up the bearish sentiment. I am not done loading up BTC and MSTR shares",
+                "score": 124,
+                "num_comments": 38,
+                "created_utc": "2025-01-21T18:01:20",
+                "sentiment": 0
+            },
+            {
+                "title": "How will this affect egg prices?",
+                "score": 117,
+                "num_comments": 80,
+                "created_utc": "2025-01-21T12:15:57",
+                "sentiment": 0
+            },
+            {
+                "title": "NREMT Exam &amp; EMT Exam Online | Pearson VUE | PTCB Exam | GED | PearsonVUE exam | OnVUE test | Take my OnVUE exam | NREMT Cert | NREMT test ,  Pharmacy Technician Exam  Take my PearsonVUE exam | NREMT questions | PTCB questions | TEAS exam ,  OnVUE exam help | Pass the NREMT | NREMT-B | Cheat Online",
+                "score": 102,
+                "num_comments": 8,
+                "created_utc": "2025-01-22T00:37:39",
+                "sentiment": 0
+            },
+            {
+                "title": "KULR Expands Bitcoin Holdings to 510 BTC, Reports 127% BTC Yield",
+                "score": 100,
+                "num_comments": 58,
+                "created_utc": "2025-01-21T13:32:40",
+                "sentiment": 0
+            },
+            {
+                "title": "Meme Trading For Noobs",
+                "score": 99,
+                "num_comments": 34,
+                "created_utc": "2025-01-21T21:35:56",
+                "sentiment": 0
+            },
+            {
+                "title": "Breakdown of my decision to hold after putting in $5k at $66",
+                "score": 97,
+                "num_comments": 102,
+                "created_utc": "2025-01-21T16:30:22",
+                "sentiment": 0
+            },
+            {
+                "title": "KULR expands Bitcoin holdings to 510 BTC, reports 127% BTC yield ",
+                "score": 81,
+                "num_comments": 0,
+                "created_utc": "2025-01-21T18:24:45",
+                "sentiment": 0
+            },
+            {
+                "title": "Bitcoin Strategic Reserve next \ud83d\ude80\ud83c\udf1f\u2728\ufe0f",
+                "score": 87,
+                "num_comments": 19,
+                "created_utc": "2025-01-21T22:47:42",
+                "sentiment": 0
+            },
+            {
+                "title": "Coinbase CEO Brian Armstrong Predicts Bitcoin Will Surge to Millions of Dollars",
+                "score": 66,
+                "num_comments": 43,
+                "created_utc": "2025-01-21T15:39:10",
+                "sentiment": 0
+            },
+            {
+                "title": "Keeping it Midcentury with a kid",
+                "score": 63,
+                "num_comments": 8,
+                "created_utc": "2025-01-21T20:59:55",
+                "sentiment": 0
+            },
+            {
+                "title": "$ANARCHY - Making crypto anarchic again!",
+                "score": 56,
+                "num_comments": 40,
+                "created_utc": "2025-01-21T23:24:14",
+                "sentiment": 0
+            }
+        ],
+        "twitter": [
+            {
+                "text": "Bullish on BTC! \ud83d\ude80",
+                "likes": 10,
+                "retweets": 5,
+                "created_at": "2025-01-22T04:07:44.578541",
+                "sentiment": 0
+            },
+            {
+                "text": "Just bought more BTC",
+                "likes": 15,
+                "retweets": 7,
+                "created_at": "2025-01-22T03:07:44.578541",
+                "sentiment": 0
+            },
+            {
+                "text": "BTC looking strong today",
+                "likes": 5,
+                "retweets": 2,
+                "created_at": "2025-01-22T02:07:44.578541",
+                "sentiment": 0
+            }
+        ]
+    }
+}
