@@ -37,7 +37,7 @@ def main():
         with st.spinner('Fetching price data...'):
             try:
                 with price_placeholder:
-                    st.info("Loading price data from CoinGecko...")
+                    st.info("Loading price data from CoinGecko API...")
                 prices = get_crypto_prices(crypto, timeframe)
 
                 if not prices.empty:
@@ -70,9 +70,10 @@ def main():
 
     with col2:
         st.subheader("News & Sentiment")
+        news_placeholder = st.empty()
         with st.spinner('Fetching news...'):
             if not os.environ.get('NEWS_API_KEY'):
-                st.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
+                news_placeholder.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
             else:
                 news = get_crypto_news(crypto)
                 if news:
@@ -88,14 +89,16 @@ def main():
                             )
                             st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
                 else:
-                    st.warning("No recent news found for this cryptocurrency.")
+                    news_placeholder.warning("No recent news found for this cryptocurrency.")
 
     # Social Media Analysis
     st.subheader("Social Media Insights")
+    social_placeholder = st.empty()
 
     # Check for Reddit credentials
     if not (os.environ.get('REDDIT_CLIENT_ID') and os.environ.get('REDDIT_CLIENT_SECRET')):
-        st.warning("Reddit API credentials are missing. Please add your Reddit Client ID and Secret to enable social media analysis.")
+        social_placeholder.warning("Reddit API credentials are missing. Please add your Reddit Client ID and Secret to enable social media analysis.")
+        return
 
     social_data = get_social_data(crypto)
 

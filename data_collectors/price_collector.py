@@ -19,16 +19,6 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
     coin_id = symbol_map.get(symbol.upper(), symbol.lower())
     base_url = "https://api.coingecko.com/api/v3"
 
-    # Test API status first
-    try:
-        ping_response = requests.get(f"{base_url}/ping")
-        if ping_response.status_code != 200:
-            print("CoinGecko API appears to be unavailable")
-            return pd.DataFrame()
-    except Exception as e:
-        print(f"Error checking CoinGecko API status: {e}")
-        return pd.DataFrame()
-
     # Calculate days parameter
     days = '1' if timeframe == "24h" else '7' if timeframe == "7d" else '30'
 
@@ -40,7 +30,7 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
 
     headers = {
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (compatible; CryptoResearchBot/1.0)'
+        'User-Agent': 'CryptoAssistant/1.0 PriceCollector'
     }
 
     # Try up to 3 times with exponential backoff
@@ -49,8 +39,18 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
 
     for attempt in range(max_retries):
         try:
-            print(f"Fetching price data for {coin_id}, attempt {attempt + 1}/{max_retries}")
+            # Check API status first
+            ping_response = requests.get(
+                f"{base_url}/ping",
+                headers=headers,
+                timeout=5
+            )
+            if ping_response.status_code != 200:
+                print("CoinGecko API is not responding")
+                return pd.DataFrame()
 
+            # Get price data
+            print(f"Fetching price data for {coin_id}, attempt {attempt + 1}/{max_retries}")
             response = requests.get(
                 f"{base_url}/coins/{coin_id}/market_chart",
                 params=params,
