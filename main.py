@@ -34,39 +34,39 @@ def main():
     with col1:
         st.subheader("Price Analysis")
         price_placeholder = st.empty()
-        with st.spinner('Fetching price data...'):
-            try:
-                with price_placeholder:
-                    st.info("Loading price data from CoinGecko API...")
-                prices = get_crypto_prices(crypto, timeframe)
 
-                if not prices.empty:
-                    price_placeholder.empty()
-                    # Create price chart
-                    fig = go.Figure()
-                    fig.add_trace(go.Candlestick(
-                        x=prices['timestamp'],
-                        open=prices['open'],
-                        high=prices['high'],
-                        low=prices['low'],
-                        close=prices['close']
-                    ))
-                    fig.update_layout(
-                        title=f"{crypto} Price Chart ({timeframe})",
-                        yaxis_title="Price (USD)",
-                        xaxis_title="Time",
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+        try:
+            with price_placeholder:
+                with st.spinner('Fetching price data...'):
+                    st.info("Connecting to CoinGecko API...")
+                    prices = get_crypto_prices(crypto, timeframe)
 
-                    # Show trend analysis
-                    trends = analyze_price_trends(prices)
-                    st.markdown("### Trend Analysis")
-                    st.write(trends)
-                else:
-                    price_placeholder.error("Unable to fetch price data. CoinGecko API may be rate limited. Please try again in a minute.")
-            except Exception as e:
-                price_placeholder.error(f"Error fetching price data: {str(e)}")
+                    if not prices.empty:
+                        # Create price chart
+                        fig = go.Figure()
+                        fig.add_trace(go.Candlestick(
+                            x=prices['timestamp'],
+                            open=prices['open'],
+                            high=prices['high'],
+                            low=prices['low'],
+                            close=prices['close']
+                        ))
+                        fig.update_layout(
+                            title=f"{crypto} Price Chart ({timeframe})",
+                            yaxis_title="Price (USD)",
+                            xaxis_title="Time",
+                            template="plotly_dark"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Show trend analysis
+                        trends = analyze_price_trends(prices)
+                        st.markdown("### Trend Analysis")
+                        st.write(trends)
+                    else:
+                        st.error("Unable to fetch price data. The CoinGecko public API may be experiencing issues. Please try again in a few minutes.")
+        except Exception as e:
+            price_placeholder.error(f"Error: {str(e)}")
 
     with col2:
         st.subheader("News & Sentiment")

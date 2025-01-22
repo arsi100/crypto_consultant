@@ -30,7 +30,7 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
 
     headers = {
         'Accept': 'application/json',
-        'User-Agent': 'CryptoAssistant/1.0 PriceCollector'
+        'User-Agent': 'CryptoAssistant/1.0'
     }
 
     # Try up to 3 times with exponential backoff
@@ -40,13 +40,18 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
     for attempt in range(max_retries):
         try:
             # Check API status first
-            ping_response = requests.get(
+            status_response = requests.get(
                 f"{base_url}/ping",
                 headers=headers,
                 timeout=5
             )
-            if ping_response.status_code != 200:
-                print("CoinGecko API is not responding")
+
+            if status_response.status_code == 429:
+                print("Rate limited on status check")
+                time.sleep(retry_delay * (2 ** attempt))
+                continue
+            elif status_response.status_code != 200:
+                print(f"CoinGecko API is not available (Status: {status_response.status_code})")
                 return pd.DataFrame()
 
             # Get price data
@@ -63,6 +68,9 @@ def get_crypto_prices(symbol: str, timeframe: str) -> pd.DataFrame:
                 print(f"Rate limited, waiting {wait_time} seconds...")
                 time.sleep(wait_time)
                 continue
+            elif response.status_code == 401:
+                print("CoinGecko API returned unauthorized - using public API without authentication")
+                return pd.DataFrame()
 
             response.raise_for_status()
             data = response.json()
