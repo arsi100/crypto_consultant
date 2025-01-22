@@ -29,17 +29,19 @@ def main():
         ["24h", "7d", "30d"]
     )
 
-    # Add status indicators
-    st.sidebar.markdown("### API Status")
-
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Price Analysis")
+        price_placeholder = st.empty()
         with st.spinner('Fetching price data...'):
             try:
+                with price_placeholder:
+                    st.info("Loading price data from CoinGecko...")
                 prices = get_crypto_prices(crypto, timeframe)
+
                 if not prices.empty:
+                    price_placeholder.empty()
                     # Create price chart
                     fig = go.Figure()
                     fig.add_trace(go.Candlestick(
@@ -52,7 +54,8 @@ def main():
                     fig.update_layout(
                         title=f"{crypto} Price Chart ({timeframe})",
                         yaxis_title="Price (USD)",
-                        xaxis_title="Time"
+                        xaxis_title="Time",
+                        template="plotly_dark"
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -61,9 +64,9 @@ def main():
                     st.markdown("### Trend Analysis")
                     st.write(trends)
                 else:
-                    st.error("Unable to fetch price data. CoinGecko API may be rate limited. Please try again in a minute.")
+                    price_placeholder.error("Unable to fetch price data. CoinGecko API may be rate limited. Please try again in a minute.")
             except Exception as e:
-                st.error(f"Error in price analysis: {str(e)}")
+                price_placeholder.error(f"Error fetching price data: {str(e)}")
 
     with col2:
         st.subheader("News & Sentiment")
@@ -79,8 +82,8 @@ def main():
                         with st.expander(item['title']):
                             st.markdown(f"_{item['summary']}_")
                             sentiment_color = (
-                                "🟢" if item['sentiment'] == 'positive' 
-                                else "🔴" if item['sentiment'] == 'negative' 
+                                "🟢" if item['sentiment'] == 'positive'
+                                else "🔴" if item['sentiment'] == 'negative'
                                 else "⚪"
                             )
                             st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
