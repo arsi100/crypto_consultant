@@ -100,6 +100,18 @@ def main():
 
                     logger.info(f"Successfully fetched price data: {len(prices)} records")
 
+                    # Display current price prominently
+                    current_price = prices['close'].iloc[-1]
+                    last_updated = prices['timestamp'].iloc[-1].strftime("%Y-%m-%d %H:%M:%S UTC")
+
+                    st.markdown(f"""
+                    <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 1rem;'>
+                        <h2 style='margin: 0; color: #E0E0E0;'>{crypto} Current Price</h2>
+                        <h1 style='margin: 0.5rem 0; color: #00FF00;'>${current_price:,.2f}</h1>
+                        <p style='margin: 0; color: #808080; font-size: 0.8rem;'>Last Updated: {last_updated}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
                     # Create price chart
                     fig = go.Figure()
                     fig.add_trace(go.Candlestick(
