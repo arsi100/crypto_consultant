@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict
 import time
+from analysis.pattern_recognition import analyze_patterns
 
 def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
     """
@@ -21,6 +22,8 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
             'support': None,
             'resistance': None
         },
+        'patterns': [],
+        'bollinger_bands': None,
         'analysis': 'No price data available for analysis',
         'price_change_percent': 0.0
     }
@@ -68,6 +71,9 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         current_macd = macd.iloc[-1]
         current_signal = signal.iloc[-1]
 
+        # Pattern Recognition
+        pattern_analysis = analyze_patterns(price_data)
+
         # Determine trend and momentum
         try:
             price_change = ((current_price - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
@@ -107,15 +113,21 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
             else:
                 analysis += ". MACD suggests momentum may be weakening"
 
-        # Calculate support and resistance levels
-        try:
-            window = min(len(price_data), 20)  # Use last 20 periods or all available data
-            recent_prices = price_data.tail(window)
-            support = recent_prices['low'].nlargest(3).mean()  # Average of 3 highest lows
-            resistance = recent_prices['high'].nsmallest(3).mean()  # Average of 3 lowest highs
-        except Exception as e:
-            print(f"Error calculating support/resistance: {str(e)}")
-            support = resistance = None
+        # Add pattern analysis to the report
+        if pattern_analysis['patterns']:
+            analysis += "\n\nDetected patterns:"
+            for pattern in pattern_analysis['patterns']:
+                analysis += f"\n• {pattern['description']} (Confidence: {pattern['confidence']:.0%})"
+
+        # Add Bollinger Bands analysis
+        if pattern_analysis['bollinger_bands']:
+            bb = pattern_analysis['bollinger_bands']
+            current_bb_position = (current_price - bb['lower']) / (bb['upper'] - bb['lower'])
+
+            if current_bb_position > 0.95:
+                analysis += "\n• Price is near upper Bollinger Band - potential resistance"
+            elif current_bb_position < 0.05:
+                analysis += "\n• Price is near lower Bollinger Band - potential support"
 
         result = {
             'trend': trend,
@@ -127,18 +139,15 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
                 'macd': round(float(current_macd), 4) if not pd.isna(current_macd) else None,
                 'macd_signal': round(float(current_signal), 4) if not pd.isna(current_signal) else None
             },
+            'patterns': pattern_analysis['patterns'],
+            'bollinger_bands': pattern_analysis['bollinger_bands'],
             'support_resistance': {
-                'support': round(float(support), 2) if support is not None else None,
-                'resistance': round(float(resistance), 2) if resistance is not None else None
+                'support': round(pattern_analysis['bollinger_bands']['lower'], 2) if pattern_analysis['bollinger_bands'] else None,
+                'resistance': round(pattern_analysis['bollinger_bands']['upper'], 2) if pattern_analysis['bollinger_bands'] else None
             },
             'analysis': analysis,
             'price_change_percent': round(price_change, 2)
         }
-
-        # Ensure all required fields are present
-        for key in default_response:
-            if key not in result:
-                result[key] = default_response[key]
 
         return result
 
