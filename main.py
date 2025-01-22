@@ -4,6 +4,13 @@ from datetime import datetime, timedelta
 import pandas as pd
 import os
 import time
+import json
+
+# Helper function for JSON serialization
+def json_serial(obj):
+    if isinstance(obj, (datetime, pd.Timestamp)):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 from data_collectors.price_collector import get_crypto_prices
 from data_collectors.news_collector import get_crypto_news
@@ -209,13 +216,46 @@ def main():
             response += f"• Current trend: {trends['trend'].capitalize()}\n"
             response += f"• {trends['analysis']}\n\n"
 
+            # Add more detailed technical analysis
+            if trends['indicators']['rsi'] is not None:
+                rsi_val = trends['indicators']['rsi']
+                response += f"• RSI Analysis: {rsi_val:.1f} - "
+                if rsi_val > 70:
+                    response += "Market is overbought, potential reversal incoming\n"
+                elif rsi_val < 30:
+                    response += "Market is oversold, watch for potential upward movement\n"
+                else:
+                    response += "RSI in neutral territory\n"
+
+            if all(v is not None for v in [trends['indicators']['macd'], trends['indicators']['macd_signal']]):
+                macd_diff = trends['indicators']['macd'] - trends['indicators']['macd_signal']
+                response += f"• MACD Signal: {'Bullish' if macd_diff > 0 else 'Bearish'} momentum "
+                response += f"(Difference: {macd_diff:.4f})\n"
+
         if news:
-            response += "📰 News Sentiment:\n"
-            response += f"• Overall sentiment: {sentiment['overall']}\n"
-            recent_news = news[:3]
-            response += "• Recent headlines:\n"
-            for item in recent_news:
-                response += f"  - {item['title']} ({item['sentiment']})\n"
+            response += "\n📰 News Sentiment:\n"
+            response += f"• Overall market sentiment: {sentiment['overall'].capitalize()}\n"
+            response += "• Key news impacts:\n"
+            for item in news[:3]:
+                response += f"  - {item['title']}\n"
+                response += f"    Sentiment: {item['sentiment'].capitalize()}\n"
+                if 'summary' in item:
+                    response += f"    {item['summary'][:150]}...\n"
+
+            # Add social media context
+            if isinstance(social_data, dict):
+                response += "\n📱 Social Media Insights:\n"
+                for platform in ['reddit', 'twitter']:
+                    if platform in social_data and not social_data[platform].empty:
+                        df = social_data[platform]
+                        positive = len(df[df['sentiment'] > 0.05])
+                        negative = len(df[df['sentiment'] < -0.05])
+                        total = len(df)
+                        if total > 0:
+                            response += f"• {platform.capitalize()} Sentiment:\n"
+                            response += f"  - Positive: {positive/total*100:.1f}%\n"
+                            response += f"  - Negative: {negative/total*100:.1f}%\n"
+                            response += f"  - Neutral: {(total-positive-negative)/total*100:.1f}%\n"
 
         st.write(response)
 
@@ -223,28 +263,60 @@ def main():
     if st.button("Generate Daily Report"):
         with st.spinner('Generating report...'):
             try:
+                # Ensure we have valid data before generating report
+                if not trends:
+                    st.error("No price analysis data available. Please wait for data to load.")
+                    return
+
+                # Prepare report data with proper error handling
                 report_data = {
-                    'timestamp': datetime.now().isoformat(),
+                    'timestamp': datetime.now(),
                     'crypto': crypto,
                     'price_analysis': {
                         'trend': trends.get('trend', 'N/A'),
                         'strength': trends.get('trend_strength', 'N/A'),
                         'analysis': trends.get('analysis', 'N/A'),
                         'indicators': trends.get('indicators', {})
-                    },
-                    'news_sentiment': sentiment.get('overall', 'No news data available'),
-                    'social_data': {
-                        'reddit': social_data.get('reddit', pd.DataFrame()).to_dict('records') if not social_data.get('reddit', pd.DataFrame()).empty else [],
-                        'twitter': social_data.get('twitter', pd.DataFrame()).to_dict('records') if not social_data.get('twitter', pd.DataFrame()).empty else []
                     }
                 }
 
-                store_analysis_results(report_data)
-                send_daily_report(report_data)
-                st.success("Daily report generated and sent!")
+                # Add sentiment data if available
+                if isinstance(sentiment, dict) and 'overall' in sentiment:
+                    report_data['news_sentiment'] = sentiment['overall']
+                else:
+                    report_data['news_sentiment'] = 'No news data available'
+
+                # Process social data with proper error handling
+                social_report = {'reddit': [], 'twitter': []}
+                if isinstance(social_data, dict):
+                    for platform in ['reddit', 'twitter']:
+                        if platform in social_data and not social_data[platform].empty:
+                            try:
+                                platform_data = social_data[platform].copy()
+                                # Convert timestamps to string format
+                                if 'timestamp' in platform_data.columns:
+                                    platform_data['timestamp'] = platform_data['timestamp'].apply(lambda x: x.isoformat() if pd.notnull(x) else None)
+                                social_report[platform] = platform_data.to_dict('records')
+                            except Exception as e:
+                                print(f"Error processing {platform} data: {str(e)}")
+                                social_report[platform] = []
+
+                report_data['social_data'] = social_report
+
+                # Store and send report with proper JSON serialization
+                try:
+                    store_analysis_results(json.loads(json.dumps(report_data, default=json_serial)))
+                    send_daily_report(report_data)
+                    st.success("Daily report generated and sent successfully!")
+                except Exception as e:
+                    st.error(f"Error saving/sending report: {str(e)}")
+                    print(f"Report save/send error: {str(e)}")
+
             except Exception as e:
                 st.error(f"Error generating report: {str(e)}")
                 print(f"Report generation error: {str(e)}")
+
+    # Previous chat interface code remains unchanged
 
 if __name__ == "__main__":
     try:
