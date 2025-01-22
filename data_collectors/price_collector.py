@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import logging
 import time
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class CoinGeckoClient:
         """Fetch market chart data from CoinGecko with retry logic"""
         max_retries = 3
         retry_delay = 1
+        api_key = os.environ.get('COINGECKO_API_KEY')
 
         for attempt in range(max_retries):
             try:
@@ -34,18 +36,31 @@ class CoinGeckoClient:
                 params = {
                     "vs_currency": vs_currency,
                     "days": days,
-                    "interval": "hourly" if days == "1" else "daily"
+                    "interval": "hourly" if days == "1" else "daily",
+                    "x_cg_demo_api_key": api_key
+                }
+
+                headers = {
+                    'X-Cg-Api-Key': api_key,
+                    'User-Agent': 'CryptoIntelligence/1.0'
                 }
 
                 response = requests.get(
                     url, 
                     params=params, 
-                    timeout=10,
-                    headers={'User-Agent': 'Mozilla/5.0'}
+                    headers=headers,
+                    timeout=10
                 )
 
                 if response.status_code == 429:
-                    logger.error("Rate limit exceeded, falling back to mock data")
+                    logger.error("Rate limit exceeded")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay * (attempt + 1))
+                        continue
+                    return None
+
+                if response.status_code == 401:
+                    logger.error("Unauthorized - Invalid API key")
                     return None
 
                 response.raise_for_status()
@@ -60,6 +75,37 @@ class CoinGeckoClient:
                     return None
 
         return None
+
+def get_crypto_prices(crypto: str, timeframe: str) -> pd.DataFrame:
+    """Get cryptocurrency price data from CoinGecko with fallback to mock data"""
+    try:
+        coin_id = CoinGeckoClient.get_coin_id(crypto)
+
+        # Convert timeframe to days parameter
+        days_map = {"24h": "1", "7d": "7", "30d": "30"}
+        days = days_map.get(timeframe, "1")
+
+        logger.info(f"Fetching {timeframe} price data for {coin_id} from CoinGecko")
+        market_data = CoinGeckoClient.get_market_chart(coin_id, "usd", days)
+
+        if market_data and 'prices' in market_data:
+            # Convert price data to DataFrame
+            prices_df = pd.DataFrame(market_data['prices'], columns=['timestamp', 'close'])
+            prices_df['timestamp'] = pd.to_datetime(prices_df['timestamp'], unit='ms')
+
+            # Calculate OHLC from price data
+            ohlc = prices_df.set_index('timestamp')['close'].resample('1H' if timeframe == "24h" else '1D').ohlc()
+            result = ohlc.reset_index()
+
+            logger.info(f"Successfully fetched {len(result)} price points from CoinGecko")
+            return result
+
+        logger.warning("Falling back to mock data generation")
+        return generate_mock_price_data(timeframe)
+
+    except Exception as e:
+        logger.error(f"Error in get_crypto_prices: {str(e)}")
+        return generate_mock_price_data(timeframe)
 
 def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
     """Generate mock price data as fallback"""
@@ -96,42 +142,5 @@ def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
     df = pd.DataFrame(prices, columns=['open', 'high', 'low', 'close'])
     df['timestamp'] = timestamps
 
+    logger.info(f"Generated {len(df)} mock price points")
     return df[['timestamp', 'open', 'high', 'low', 'close']]
-
-def get_crypto_prices(crypto: str, timeframe: str) -> pd.DataFrame:
-    """Get cryptocurrency price data from CoinGecko with fallback to mock data"""
-    try:
-        coin_id = CoinGeckoClient.get_coin_id(crypto)
-
-        # Convert timeframe to days parameter
-        days_map = {"24h": "1", "7d": "7", "30d": "30"}
-        days = days_map.get(timeframe, "1")
-
-        logger.info(f"Fetching {timeframe} price data for {coin_id} from CoinGecko")
-        market_data = CoinGeckoClient.get_market_chart(coin_id, "usd", days)
-
-        if market_data and 'prices' in market_data:
-            # Convert price data to DataFrame
-            prices_df = pd.DataFrame(market_data['prices'], columns=['timestamp', 'close'])
-            prices_df['timestamp'] = pd.to_datetime(prices_df['timestamp'], unit='ms')
-
-            # Calculate OHLC from price data
-            # For simplicity, we'll use the same close price for open, high, and low
-            # as CoinGecko's free API doesn't provide OHLC data
-            prices_df['open'] = prices_df['close']
-            prices_df['high'] = prices_df['close']
-            prices_df['low'] = prices_df['close']
-
-            result = prices_df[['timestamp', 'open', 'high', 'low', 'close']]
-            logger.info(f"Successfully fetched {len(result)} price points from CoinGecko")
-            return result
-
-        logger.warning("Falling back to mock data generation")
-        mock_data = generate_mock_price_data(timeframe)
-        logger.info(f"Generated {len(mock_data)} mock price points")
-        return mock_data
-
-    except Exception as e:
-        logger.error(f"Error in get_crypto_prices: {str(e)}")
-        logger.warning("Falling back to mock data due to error")
-        return generate_mock_price_data(timeframe)
