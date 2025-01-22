@@ -6,6 +6,7 @@ import os
 import time
 import json
 import logging
+import requests
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -16,47 +17,6 @@ def json_serial(obj):
     if isinstance(obj, (datetime, pd.Timestamp)):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
-
-from data_collectors.price_collector import get_crypto_prices
-from data_collectors.news_collector import get_crypto_news
-from data_collectors.social_collector import get_social_data
-from analysis.price_analyzer import analyze_price_trends
-from analysis.sentiment_analyzer import analyze_sentiment
-from utils.email_sender import send_daily_report
-from utils.data_storage import store_analysis_results
-
-# Configure Streamlit page
-st.set_page_config(
-    page_title="AI Crypto Research Assistant",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Initialize session state for data persistence
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
-    st.session_state.chat_input = ""
-    st.session_state.last_update = None
-    st.session_state.error_count = 0
-    st.session_state.max_retries = 3
-    st.session_state.trends = None
-    st.session_state.news = []
-    st.session_state.sentiment = {'overall': 'neutral'}
-    st.session_state.social_data = {'reddit': pd.DataFrame(), 'twitter': pd.DataFrame()}
-
-def initialize_app():
-    """Initialize the application and handle any startup requirements"""
-    try:
-        if not st.session_state.initialized:
-            logger.info("Initializing application...")
-            st.session_state.initialized = True
-            st.session_state.last_update = datetime.now()
-            logger.info("Application initialized successfully")
-            return True
-    except Exception as e:
-        logger.error(f"Error initializing application: {str(e)}")
-        st.error(f"Error initializing application: {str(e)}")
-        return False
 
 def generate_daily_report(crypto, trends, news, sentiment):
     """
@@ -115,6 +75,68 @@ def generate_daily_report(crypto, trends, news, sentiment):
         logger.error(f"Error in report generation: {str(e)}", exc_info=True)
         return False, f"Error generating report: {str(e)}"
 
+def get_real_crypto_price(crypto):
+    """Get real-time price data from CoinGecko"""
+    try:
+        api_key = os.environ.get('COINGECKO_API_KEY')
+        url = f"https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            'ids': 'bitcoin' if crypto == 'BTC' else crypto.lower(),
+            'vs_currencies': 'usd',
+            'x_cg_demo_api_key': api_key
+        }
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            return data[crypto.lower()]['usd']
+        else:
+            logger.error(f"CoinGecko API error: {response.status_code}")
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching real-time price: {str(e)}")
+        return None
+
+from data_collectors.price_collector import get_crypto_prices
+from data_collectors.news_collector import get_crypto_news
+from data_collectors.social_collector import get_social_data
+from analysis.price_analyzer import analyze_price_trends
+from analysis.sentiment_analyzer import analyze_sentiment
+from utils.email_sender import send_daily_report
+from utils.data_storage import store_analysis_results
+
+# Configure Streamlit page
+st.set_page_config(
+    page_title="AI Crypto Research Assistant",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize session state for data persistence
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
+    st.session_state.chat_input = ""
+    st.session_state.last_update = None
+    st.session_state.error_count = 0
+    st.session_state.max_retries = 3
+    st.session_state.trends = None
+    st.session_state.news = []
+    st.session_state.sentiment = {'overall': 'neutral'}
+    st.session_state.social_data = {'reddit': pd.DataFrame(), 'twitter': pd.DataFrame()}
+
+def initialize_app():
+    """Initialize the application and handle any startup requirements"""
+    try:
+        if not st.session_state.initialized:
+            logger.info("Initializing application...")
+            st.session_state.initialized = True
+            st.session_state.last_update = datetime.now()
+            logger.info("Application initialized successfully")
+            return True
+    except Exception as e:
+        logger.error(f"Error initializing application: {str(e)}")
+        st.error(f"Error initializing application: {str(e)}")
+        return False
+
 def main():
     try:
         st.title("🤖 AI Crypto Research Assistant")
@@ -131,13 +153,25 @@ def main():
             ["24h", "7d", "30d"]
         )
 
-        logger.info(f"Selected crypto: {crypto}, timeframe: {timeframe}")
+        # Get real-time price first
+        current_price = get_real_crypto_price(crypto)
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.subheader("Price Analysis")
-            price_placeholder = st.empty()
+
+            # Display current price prominently
+            if current_price:
+                st.markdown(f"""
+                <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 1rem;'>
+                    <h2 style='margin: 0; color: #E0E0E0;'>{crypto} Current Price</h2>
+                    <h1 style='margin: 0.5rem 0; color: #00FF00;'>${current_price:,.2f}</h1>
+                    <p style='margin: 0; color: #808080; font-size: 0.8rem;'>Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.error("Unable to fetch current price. Using historical data only.")
 
             try:
                 logger.info("Fetching price data...")
@@ -165,96 +199,83 @@ def main():
                     st.error("Error analyzing price trends")
                     return
 
-                with price_placeholder:
-                    # Display current price prominently
-                    current_price = prices['close'].iloc[-1]
-                    last_updated = prices['timestamp'].iloc[-1].strftime("%Y-%m-%d %H:%M:%S UTC")
+                # Price Analysis Summary and Trading Signal
+                price_change = st.session_state.trends['price_change_percent']
+                price_change_color = "green" if price_change > 0 else "red"
 
-                    st.markdown(f"""
-                    <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 1rem;'>
-                        <h2 style='margin: 0; color: #E0E0E0;'>{crypto} Current Price</h2>
-                        <h1 style='margin: 0.5rem 0; color: #00FF00;'>${current_price:,.2f}</h1>
-                        <p style='margin: 0; color: #808080; font-size: 0.8rem;'>Last Updated: {last_updated}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
+                    <h3 style='margin: 0; color: #E0E0E0;'>Price Analysis Summary</h3>
+                    <p style='margin: 0.5rem 0; font-size: 1.2em;'>
+                        Price Change: <span style='color: {price_change_color}'>{price_change:+.2f}%</span>
+                    </p>
+                    <p style='margin: 0.5rem 0;'>{st.session_state.trends['analysis']}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    # Price Analysis Summary and Trading Signal
-                    price_change = st.session_state.trends['price_change_percent']
-                    price_change_color = "green" if price_change > 0 else "red"
+                # Trading Signal Box
+                signal_color = (
+                    "🟢" if st.session_state.trends['trend'] == 'bullish'
+                    else "🔴" if st.session_state.trends['trend'] == 'bearish'
+                    else "⚪"
+                )
+                signal_text = (
+                    "Strong Buy" if st.session_state.trends['trend'] == 'bullish' and st.session_state.trends['trend_strength'] == 'strong'
+                    else "Buy" if st.session_state.trends['trend'] == 'bullish'
+                    else "Strong Sell" if st.session_state.trends['trend'] == 'bearish' and st.session_state.trends['trend_strength'] == 'strong'
+                    else "Sell" if st.session_state.trends['trend'] == 'bearish'
+                    else "Hold"
+                )
 
-                    st.markdown(f"""
-                    <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
-                        <h3 style='margin: 0; color: #E0E0E0;'>Price Analysis Summary</h3>
-                        <p style='margin: 0.5rem 0; font-size: 1.2em;'>
-                            Price Change: <span style='color: {price_change_color}'>{price_change:+.2f}%</span>
-                        </p>
-                        <p style='margin: 0.5rem 0;'>{st.session_state.trends['analysis']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
+                    <h3 style='margin: 0; color: #E0E0E0;'>Trading Signal</h3>
+                    <h2 style='margin: 0.5rem 0;'>{signal_color} {signal_text}</h2>
+                    <p style='color: #CCCCCC; font-size: 0.9em;'>Based on technical analysis of price movement, trend strength, and market indicators.</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    # Trading Signal Box
-                    signal_color = (
-                        "🟢" if st.session_state.trends['trend'] == 'bullish'
-                        else "🔴" if st.session_state.trends['trend'] == 'bearish'
-                        else "⚪"
-                    )
-                    signal_text = (
-                        "Strong Buy" if st.session_state.trends['trend'] == 'bullish' and st.session_state.trends['trend_strength'] == 'strong'
-                        else "Buy" if st.session_state.trends['trend'] == 'bullish'
-                        else "Strong Sell" if st.session_state.trends['trend'] == 'bearish' and st.session_state.trends['trend_strength'] == 'strong'
-                        else "Sell" if st.session_state.trends['trend'] == 'bearish'
-                        else "Hold"
-                    )
+                # Technical Analysis section
+                with st.expander("📊 Technical Analysis Details", expanded=True):
+                    st.markdown("""
+                    ### Understanding the Indicators
 
-                    st.markdown(f"""
-                    <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
-                        <h3 style='margin: 0; color: #E0E0E0;'>Trading Signal</h3>
-                        <h2 style='margin: 0.5rem 0;'>{signal_color} {signal_text}</h2>
-                        <p style='color: #CCCCCC; font-size: 0.9em;'>Based on technical analysis of price movement, trend strength, and market indicators.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    **Bollinger Bands** track price volatility:
+                    - Upper Band: If price hits this, potentially overvalued
+                    - Lower Band: If price hits this, potentially undervalued
+                    - Middle Band: 20-day average, shows trend
+                    - Bandwidth: Higher = more volatile
+                    - Squeeze: Narrow bands suggest a big move coming
 
-                    # Technical Analysis section
-                    with st.expander("📊 Technical Analysis Details", expanded=True):
-                        st.markdown("""
-                        ### Understanding the Indicators
+                    **RSI** shows if price is overbought/oversold:
+                    - Above 70: Overbought (might drop)
+                    - Below 30: Oversold (might rise)
+                    - 30-70: Normal range
 
-                        **Bollinger Bands** track price volatility:
-                        - Upper Band: If price hits this, potentially overvalued
-                        - Lower Band: If price hits this, potentially undervalued
-                        - Middle Band: 20-day average, shows trend
-                        - Bandwidth: Higher = more volatile
-                        - Squeeze: Narrow bands suggest a big move coming
+                    **Support/Resistance**:
+                    - Support: Price floor where buying typically happens
+                    - Resistance: Price ceiling where selling typically happens
+                    """)
 
-                        **RSI** shows if price is overbought/oversold:
-                        - Above 70: Overbought (might drop)
-                        - Below 30: Oversold (might rise)
-                        - 30-70: Normal range
+                    # Technical Indicators Display
+                    col1_tech, col2_tech = st.columns(2)
 
-                        **Support/Resistance**:
-                        - Support: Price floor where buying typically happens
-                        - Resistance: Price ceiling where selling typically happens
-                        """)
+                    with col1_tech:
+                        st.markdown("#### Key Indicators")
+                        if st.session_state.trends['indicators']['rsi'] is not None:
+                            rsi = st.session_state.trends['indicators']['rsi']
+                            rsi_color = "🔴" if rsi > 70 else "🟢" if rsi < 30 else "⚪"
+                            st.write(f"RSI: {rsi_color} {rsi:.1f}")
 
-                        # Technical Indicators Display
-                        col1_tech, col2_tech = st.columns(2)
+                        st.write(f"Trend: {st.session_state.trends['trend'].capitalize()}")
+                        st.write(f"Strength: {st.session_state.trends['trend_strength'].capitalize()}")
 
-                        with col1_tech:
-                            st.markdown("#### Key Indicators")
-                            if st.session_state.trends['indicators']['rsi'] is not None:
-                                rsi = st.session_state.trends['indicators']['rsi']
-                                rsi_color = "🔴" if rsi > 70 else "🟢" if rsi < 30 else "⚪"
-                                st.write(f"RSI: {rsi_color} {rsi:.1f}")
-
-                            st.write(f"Trend: {st.session_state.trends['trend'].capitalize()}")
-                            st.write(f"Strength: {st.session_state.trends['trend_strength'].capitalize()}")
-
-                        with col2_tech:
-                            st.markdown("#### Price Levels")
-                            if st.session_state.trends['support_resistance']['support'] is not None:
-                                st.write(f"Support: ${st.session_state.trends['support_resistance']['support']:,.2f}")
-                            if st.session_state.trends['support_resistance']['resistance'] is not None:
-                                st.write(f"Resistance: ${st.session_state.trends['support_resistance']['resistance']:,.2f}")
+                    with col2_tech:
+                        st.markdown("#### Price Levels")
+                        if st.session_state.trends['support_resistance']['support'] is not None:
+                            st.write(f"Support: ${st.session_state.trends['support_resistance']['support']:,.2f}")
+                        if st.session_state.trends['support_resistance']['resistance'] is not None:
+                            st.write(f"Resistance: ${st.session_state.trends['support_resistance']['resistance']:,.2f}")
 
                     # Chart with Bollinger Bands
                     fig = go.Figure()
