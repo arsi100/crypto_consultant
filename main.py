@@ -83,23 +83,32 @@ def main():
             price_placeholder = st.empty()
 
             try:
+                logger.info("Fetching price data...")
+                st.info("Fetching price data...")
+                prices = get_crypto_prices(crypto, timeframe)
+
+                if prices is None:
+                    logger.error("Price data is None")
+                    st.error("Failed to fetch price data. Please try again.")
+                    return
+
+                if prices.empty:
+                    logger.error("Empty price dataframe received")
+                    st.error("No price data available. The API may be experiencing issues.")
+                    return
+
+                logger.info(f"Successfully fetched price data: {len(prices)} records")
+
+                # Analyze trends first before displaying anything
+                logger.info("Analyzing price trends...")
+                st.session_state.trends = analyze_price_trends(prices)
+
+                if st.session_state.trends is None:
+                    logger.error("Trend analysis returned None")
+                    st.error("Error analyzing price trends")
+                    return
+
                 with price_placeholder:
-                    logger.info("Fetching price data...")
-                    st.info("Fetching price data...")
-                    prices = get_crypto_prices(crypto, timeframe)
-
-                    if prices is None:
-                        logger.error("Price data is None")
-                        st.error("Failed to fetch price data. Please try again.")
-                        return
-
-                    if prices.empty:
-                        logger.error("Empty price dataframe received")
-                        st.error("No price data available. The API may be experiencing issues.")
-                        return
-
-                    logger.info(f"Successfully fetched price data: {len(prices)} records")
-
                     # Display current price prominently
                     current_price = prices['close'].iloc[-1]
                     last_updated = prices['timestamp'].iloc[-1].strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -112,80 +121,141 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # Create price chart
+                    # Price Analysis Summary and Trading Signal
+                    price_change = st.session_state.trends['price_change_percent']
+                    price_change_color = "green" if price_change > 0 else "red"
+
+                    st.markdown(f"""
+                    <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
+                        <h3 style='margin: 0; color: #E0E0E0;'>Price Analysis Summary</h3>
+                        <p style='margin: 0.5rem 0; font-size: 1.2em;'>
+                            Price Change: <span style='color: {price_change_color}'>{price_change:+.2f}%</span>
+                        </p>
+                        <p style='margin: 0.5rem 0;'>{st.session_state.trends['analysis']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Trading Signal Box
+                    signal_color = (
+                        "🟢" if st.session_state.trends['trend'] == 'bullish'
+                        else "🔴" if st.session_state.trends['trend'] == 'bearish'
+                        else "⚪"
+                    )
+                    signal_text = (
+                        "Strong Buy" if st.session_state.trends['trend'] == 'bullish' and st.session_state.trends['trend_strength'] == 'strong'
+                        else "Buy" if st.session_state.trends['trend'] == 'bullish'
+                        else "Strong Sell" if st.session_state.trends['trend'] == 'bearish' and st.session_state.trends['trend_strength'] == 'strong'
+                        else "Sell" if st.session_state.trends['trend'] == 'bearish'
+                        else "Hold"
+                    )
+
+                    st.markdown(f"""
+                    <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
+                        <h3 style='margin: 0; color: #E0E0E0;'>Trading Signal</h3>
+                        <h2 style='margin: 0.5rem 0;'>{signal_color} {signal_text}</h2>
+                        <p style='color: #CCCCCC; font-size: 0.9em;'>Based on technical analysis of price movement, trend strength, and market indicators.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Technical Analysis section
+                    with st.expander("📊 Technical Analysis Details", expanded=True):
+                        st.markdown("""
+                        ### Understanding the Indicators
+
+                        **Bollinger Bands** track price volatility:
+                        - Upper Band: If price hits this, potentially overvalued
+                        - Lower Band: If price hits this, potentially undervalued
+                        - Middle Band: 20-day average, shows trend
+                        - Bandwidth: Higher = more volatile
+                        - Squeeze: Narrow bands suggest a big move coming
+
+                        **RSI** shows if price is overbought/oversold:
+                        - Above 70: Overbought (might drop)
+                        - Below 30: Oversold (might rise)
+                        - 30-70: Normal range
+
+                        **Support/Resistance**:
+                        - Support: Price floor where buying typically happens
+                        - Resistance: Price ceiling where selling typically happens
+                        """)
+
+                        # Technical Indicators Display
+                        col1_tech, col2_tech = st.columns(2)
+
+                        with col1_tech:
+                            st.markdown("#### Key Indicators")
+                            if st.session_state.trends['indicators']['rsi'] is not None:
+                                rsi = st.session_state.trends['indicators']['rsi']
+                                rsi_color = "🔴" if rsi > 70 else "🟢" if rsi < 30 else "⚪"
+                                st.write(f"RSI: {rsi_color} {rsi:.1f}")
+
+                            st.write(f"Trend: {st.session_state.trends['trend'].capitalize()}")
+                            st.write(f"Strength: {st.session_state.trends['trend_strength'].capitalize()}")
+
+                        with col2_tech:
+                            st.markdown("#### Price Levels")
+                            if st.session_state.trends['support_resistance']['support'] is not None:
+                                st.write(f"Support: ${st.session_state.trends['support_resistance']['support']:,.2f}")
+                            if st.session_state.trends['support_resistance']['resistance'] is not None:
+                                st.write(f"Resistance: ${st.session_state.trends['support_resistance']['resistance']:,.2f}")
+
+                    # Chart with Bollinger Bands
                     fig = go.Figure()
+
+                    # Add candlestick data
                     fig.add_trace(go.Candlestick(
                         x=prices['timestamp'],
                         open=prices['open'],
                         high=prices['high'],
                         low=prices['low'],
-                        close=prices['close']
+                        close=prices['close'],
+                        name="Price"
                     ))
+
+                    # Add Bollinger Bands to chart
+                    if st.session_state.trends.get('bollinger_bands'):
+                        bb = st.session_state.trends['bollinger_bands']
+                        fig.add_trace(go.Scatter(
+                            x=prices['timestamp'],
+                            y=[bb['upper']] * len(prices),
+                            line=dict(color='rgba(250, 0, 0, 0.5)'),
+                            name='Upper Band'
+                        ))
+                        fig.add_trace(go.Scatter(
+                            x=prices['timestamp'],
+                            y=[bb['middle']] * len(prices),
+                            line=dict(color='rgba(0, 0, 250, 0.5)'),
+                            name='Middle Band'
+                        ))
+                        fig.add_trace(go.Scatter(
+                            x=prices['timestamp'],
+                            y=[bb['lower']] * len(prices),
+                            line=dict(color='rgba(0, 250, 0, 0.5)'),
+                            name='Lower Band'
+                        ))
+
                     fig.update_layout(
                         title=f"{crypto} Price Chart ({timeframe})",
                         yaxis_title="Price (USD)",
                         xaxis_title="Time",
-                        template="plotly_dark"
+                        template="plotly_dark",
+                        showlegend=True
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-                    # Show trend analysis
-                    logger.info("Analyzing price trends...")
-                    st.session_state.trends = analyze_price_trends(prices)
-
-                    if st.session_state.trends is None:
-                        logger.error("Trend analysis returned None")
-                        st.error("Error analyzing price trends")
-                        return
-
-                    st.markdown("### Trend Analysis")
-                    col_trend1, col_trend2 = st.columns(2)
-
-                    with col_trend1:
-                        st.write("**Current Trend:**", st.session_state.trends['trend'].capitalize())
-                        st.write("**Trend Strength:**", st.session_state.trends['trend_strength'].capitalize())
-                        if st.session_state.trends['price_change_percent'] != 0:
-                            st.write("**Price Change:**", f"{st.session_state.trends['price_change_percent']}%")
-
-                    with col_trend2:
-                        if st.session_state.trends['indicators']['rsi'] is not None:
-                            st.write("**RSI:**", st.session_state.trends['indicators']['rsi'])
-                        if st.session_state.trends['support_resistance']['support'] is not None:
-                            st.write("**Support Level:**", f"${st.session_state.trends['support_resistance']['support']:,.2f}")
-                        if st.session_state.trends['support_resistance']['resistance'] is not None:
-                            st.write("**Resistance Level:**", f"${st.session_state.trends['support_resistance']['resistance']:,.2f}")
-
-                    st.write("**Analysis:**", st.session_state.trends['analysis'])
-
-                    # Add pattern recognition results
+                    # Pattern Recognition section
                     if st.session_state.trends['patterns']:
-                        st.markdown("### Pattern Recognition")
-                        for pattern in st.session_state.trends['patterns']:
-                            with st.expander(f"{pattern['type'].replace('_', ' ').title()} Pattern"):
-                                st.write("**Description:**", pattern['description'])
-                                st.write("**Confidence:**", f"{pattern['confidence']*100:.0f}%")
+                        with st.expander("🎯 Pattern Recognition"):
+                            for pattern in st.session_state.trends['patterns']:
+                                st.markdown(f"""
+                                #### {pattern['type'].replace('_', ' ').title()}
+                                - **Description:** {pattern['description']}
+                                - **Confidence:** {pattern['confidence']*100:.0f}%
+                                """)
                                 if 'support' in pattern:
-                                    st.write("**Support Level:**", f"${pattern['support']:,.2f}")
+                                    st.write(f"- **Support Level:** ${pattern['support']:,.2f}")
                                 if 'resistance' in pattern:
-                                    st.write("**Resistance Level:**", f"${pattern['resistance']:,.2f}")
-
-                    # Add Bollinger Bands info if available
-                    if st.session_state.trends['bollinger_bands']:
-                        bb = st.session_state.trends['bollinger_bands']
-                        st.markdown("### Technical Indicators")
-                        col_bb1, col_bb2 = st.columns(2)
-
-                        with col_bb1:
-                            st.write("**Bollinger Bands:**")
-                            st.write(f"Upper: ${bb['upper']:,.2f}")
-                            st.write(f"Middle: ${bb['middle']:,.2f}")
-                            st.write(f"Lower: ${bb['lower']:,.2f}")
-
-                        with col_bb2:
-                            st.write("**Band Analysis:**")
-                            st.write(f"Bandwidth: {bb['bandwidth']:.1f}%")
-                            if bb['squeeze']:
-                                st.write("🔄 Bollinger Squeeze Detected")
+                                    st.write(f"- **Resistance Level:** ${pattern['resistance']:,.2f}")
 
             except Exception as e:
                 logger.error(f"Error in price analysis section: {str(e)}", exc_info=True)
