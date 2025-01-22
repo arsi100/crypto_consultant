@@ -1,0 +1,22 @@
+{
+    "crypto": "BTC",
+    "price_analysis": {
+        "trend": "No data available",
+        "summary": {}
+    },
+    "sentiment": {
+        "overall": "positive",
+        "score": 0.22,
+        "distribution": {
+            "positive": 1,
+            "neutral": 0,
+            "negative": 1
+        }
+    },
+    "social_data": {
+        "reddit": [
+            {
+                "title": "Amen! \ud83d\ude4f\ud83c\udffb",
+                "score": 44195,
+                "num_comments": 1622,
+                "created_utc": 

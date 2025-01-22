@@ -34,6 +34,7 @@ def main():
     with col1:
         st.subheader("Price Analysis")
         price_placeholder = st.empty()
+        trends = None  # Initialize trends variable
 
         try:
             with price_placeholder:
@@ -62,11 +63,30 @@ def main():
                         # Show trend analysis
                         trends = analyze_price_trends(prices)
                         st.markdown("### Trend Analysis")
-                        st.write(trends)
+
+                        # Display trend analysis in a more readable format
+                        col_trend1, col_trend2 = st.columns(2)
+                        with col_trend1:
+                            st.write("**Current Trend:**", trends['trend'].capitalize())
+                            st.write("**Trend Strength:**", trends['trend_strength'].capitalize())
+                            if trends['price_change_percent'] != 0:
+                                st.write("**Price Change:**", f"{trends['price_change_percent']}%")
+
+                        with col_trend2:
+                            if trends['indicators']['rsi'] is not None:
+                                st.write("**RSI:**", trends['indicators']['rsi'])
+                            if trends['support_resistance']['support'] is not None:
+                                st.write("**Support Level:**", trends['support_resistance']['support'])
+                            if trends['support_resistance']['resistance'] is not None:
+                                st.write("**Resistance Level:**", trends['support_resistance']['resistance'])
+
+                        st.write("**Analysis:**", trends['analysis'])
                     else:
                         st.error("Unable to fetch price data. The CoinGecko public API may be experiencing issues. Please try again in a few minutes.")
+                        trends = analyze_price_trends(pd.DataFrame())  # Get default response
         except Exception as e:
-            price_placeholder.error(f"Error: {str(e)}")
+            st.error(f"Error: {str(e)}")
+            trends = analyze_price_trends(pd.DataFrame())  # Get default response
 
     with col2:
         st.subheader("News & Sentiment")
@@ -74,22 +94,30 @@ def main():
         with st.spinner('Fetching news...'):
             if not os.environ.get('NEWS_API_KEY'):
                 news_placeholder.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
+                news = []
+                sentiment = {'overall': 'No news data available'}
             else:
-                news = get_crypto_news(crypto)
-                if news:
-                    sentiment = analyze_sentiment(news)
-                    st.markdown("### Latest News")
-                    for item in news[:5]:
-                        with st.expander(item['title']):
-                            st.markdown(f"_{item['summary']}_")
-                            sentiment_color = (
-                                "🟢" if item['sentiment'] == 'positive'
-                                else "🔴" if item['sentiment'] == 'negative'
-                                else "⚪"
-                            )
-                            st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
-                else:
-                    news_placeholder.warning("No recent news found for this cryptocurrency.")
+                try:
+                    news = get_crypto_news(crypto)
+                    if news:
+                        sentiment = analyze_sentiment(news)
+                        st.markdown("### Latest News")
+                        for item in news[:5]:
+                            with st.expander(item['title']):
+                                st.markdown(f"_{item['summary']}_")
+                                sentiment_color = (
+                                    "🟢" if item['sentiment'] == 'positive'
+                                    else "🔴" if item['sentiment'] == 'negative'
+                                    else "⚪"
+                                )
+                                st.markdown(f"Sentiment: {sentiment_color} {item['sentiment']}")
+                    else:
+                        news_placeholder.warning("No recent news found for this cryptocurrency.")
+                        sentiment = {'overall': 'No news data available'}
+                except Exception as e:
+                    st.error(f"Error fetching news: {str(e)}")
+                    news = []
+                    sentiment = {'overall': 'Error fetching news data'}
 
     # Social Media Analysis
     st.subheader("Social Media Insights")
@@ -156,10 +184,10 @@ def main():
         response = "Based on the current analysis:\n\n"
 
         # Add price analysis
-        if not prices.empty:
+        if trends is not None:
             response += f"📈 {crypto} Price Analysis:\n"
-            response += f"• Current trend: {trends.get('trend', 'Unknown')}\n"
-            response += f"• {trends.get('analysis', 'No detailed analysis available')}\n\n"
+            response += f"• Current trend: {trends['trend'].capitalize()}\n"
+            response += f"• {trends['analysis']}\n\n"
 
         # Add news sentiment
         if news:
@@ -171,41 +199,31 @@ def main():
                 response += f"  - {item['title']} ({item['sentiment']})\n"
             response += "\n"
 
-        # Add social media insights
-        if not social_data['reddit'].empty or not social_data['twitter'].empty:
-            response += "🗣️ Social Media Insights:\n"
-
-            if not social_data['reddit'].empty:
-                reddit_sentiment = social_data['reddit']
-                positive = len(reddit_sentiment[reddit_sentiment['sentiment'] > 0.05])
-                negative = len(reddit_sentiment[reddit_sentiment['sentiment'] < -0.05])
-                response += f"• Reddit: {positive} positive vs {negative} negative discussions\n"
-
-            if not social_data['twitter'].empty:
-                twitter_sentiment = social_data['twitter']
-                positive = len(twitter_sentiment[twitter_sentiment['sentiment'] > 0.05])
-                negative = len(twitter_sentiment[twitter_sentiment['sentiment'] < -0.05])
-                response += f"• Twitter: {positive} positive vs {negative} negative mentions\n"
-
         st.write(response)
 
     # Generate and store daily report
     if st.button("Generate Daily Report"):
         with st.spinner('Generating report...'):
-            report_data = {
-                'crypto': crypto,
-                'price_analysis': {
-                    'trend': trends.get('trend', 'Unknown') if not prices.empty else 'No data available',
-                    'summary': trends if not prices.empty else {}
-                },
-                'sentiment': sentiment if news else {'overall': 'No news data available'},
-                'social_data': {
-                    'reddit': social_data.get('reddit', pd.DataFrame()).to_dict('records') if not social_data.get('reddit', pd.DataFrame()).empty else [],
-                    'twitter': social_data.get('twitter', pd.DataFrame()).to_dict('records') if not social_data.get('twitter', pd.DataFrame()).empty else []
-                }
-            }
-
             try:
+                if trends is None:
+                    trends = analyze_price_trends(pd.DataFrame())
+
+                report_data = {
+                    'timestamp': datetime.now().isoformat(),
+                    'crypto': crypto,
+                    'price_analysis': {
+                        'trend': trends['trend'],
+                        'strength': trends['trend_strength'],
+                        'analysis': trends['analysis'],
+                        'indicators': trends['indicators']
+                    },
+                    'news_sentiment': sentiment['overall'] if sentiment else 'No news data available',
+                    'social_data': {
+                        'reddit': social_data.get('reddit', pd.DataFrame()).to_dict('records') if not social_data.get('reddit', pd.DataFrame()).empty else [],
+                        'twitter': social_data.get('twitter', pd.DataFrame()).to_dict('records') if not social_data.get('twitter', pd.DataFrame()).empty else []
+                    }
+                }
+
                 store_analysis_results(report_data)
                 send_daily_report(report_data)
                 st.success("Daily report generated and sent!")
