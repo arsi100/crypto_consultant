@@ -58,6 +58,63 @@ def initialize_app():
         st.error(f"Error initializing application: {str(e)}")
         return False
 
+def generate_daily_report(crypto, trends, news, sentiment):
+    """
+    Separate function to handle report generation logic
+    Returns (success, message) tuple
+    """
+    try:
+        if not trends:
+            return False, "No price analysis data available. Please wait for data to load."
+
+        # Prepare report data
+        report_data = {
+            'timestamp': datetime.now(),
+            'crypto': crypto,
+            'price_analysis': {
+                'trend': trends.get('trend', 'unknown'),
+                'strength': trends.get('trend_strength', 'unknown'),
+                'analysis': trends.get('analysis', 'No analysis available'),
+                'indicators': trends.get('indicators', {})
+            },
+            'news_sentiment': sentiment.get('overall', 'neutral'),
+            'news_items': [
+                {
+                    'title': item.get('title', ''),
+                    'sentiment': item.get('sentiment', 'neutral'),
+                    'summary': item.get('summary', '')
+                }
+                for item in (news[:5] if news else [])
+            ]
+        }
+
+        # Serialize data
+        try:
+            serialized_data = json.loads(json.dumps(report_data, default=json_serial))
+        except Exception as e:
+            logger.error(f"Error serializing report data: {str(e)}")
+            return False, "Error processing report data. Please try again."
+
+        # Store results
+        try:
+            store_analysis_results(serialized_data)
+        except Exception as e:
+            logger.warning(f"Could not store analysis results: {str(e)}")
+            # Continue even if storage fails
+
+        # Send report
+        try:
+            send_daily_report(serialized_data)
+        except Exception as e:
+            logger.error(f"Error sending report: {str(e)}")
+            return False, f"Error sending report: {str(e)}"
+
+        return True, "Daily report generated and sent successfully!"
+
+    except Exception as e:
+        logger.error(f"Error in report generation: {str(e)}", exc_info=True)
+        return False, f"Error generating report: {str(e)}"
+
 def main():
     try:
         st.title("🤖 AI Crypto Research Assistant")
@@ -340,85 +397,54 @@ def main():
 
         # Generate and store daily report
         if st.button("Generate Daily Report"):
+            # Create placeholders for progress tracking
+            progress_placeholder = st.empty()
+            status_placeholder = st.empty()
+            success_placeholder = st.empty()
+
             try:
-                logger.info("Starting report generation...")
+                with progress_placeholder.container():
+                    progress_bar = st.progress(0)
 
-                # Create a progress bar
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                    # Step 1: Validation (25%)
+                    status_placeholder.text("Validating data...")
+                    progress_bar.progress(25)
+                    time.sleep(0.5)  # Small delay for visual feedback
 
-                # Validate required data
-                if not st.session_state.trends:
-                    logger.error("No price analysis data available for report")
-                    st.error("No price analysis data available. Please wait for data to load.")
-                    return
-
-                # Step 1: Prepare report data (25%)
-                status_text.text("Preparing report data...")
-                report_data = {
-                    'timestamp': datetime.now(),
-                    'crypto': crypto,
-                    'price_analysis': {
-                        'trend': st.session_state.trends.get('trend', 'unknown'),
-                        'strength': st.session_state.trends.get('trend_strength', 'unknown'),
-                        'analysis': st.session_state.trends.get('analysis', 'No analysis available'),
-                        'indicators': st.session_state.trends.get('indicators', {})
-                    },
-                    'news_sentiment': st.session_state.sentiment.get('overall', 'neutral'),
-                    'news_items': [
-                        {
-                            'title': item.get('title', ''),
-                            'sentiment': item.get('sentiment', 'neutral'),
-                            'summary': item.get('summary', '')
-                        }
-                        for item in (st.session_state.news[:5] if st.session_state.news else [])
-                    ]
-                }
-                progress_bar.progress(25)
-
-                # Step 2: Serialize data (50%)
-                status_text.text("Processing report data...")
-                try:
-                    logger.info("Converting report data to JSON...")
-                    serialized_data = json.loads(json.dumps(report_data, default=json_serial))
+                    # Step 2: Generate Report (50%)
+                    status_placeholder.text("Generating report...")
                     progress_bar.progress(50)
-                except Exception as e:
-                    logger.error(f"Error serializing report data: {str(e)}")
-                    st.error("Error processing report data. Please try again.")
-                    return
 
-                # Step 3: Store analysis results (75%)
-                status_text.text("Storing analysis results...")
-                try:
-                    logger.info("Storing analysis results...")
-                    store_analysis_results(serialized_data)
-                    progress_bar.progress(75)
-                except Exception as e:
-                    logger.error(f"Error storing analysis results: {str(e)}")
-                    st.warning("Could not store analysis results, but continuing with report generation...")
+                    # Call report generation function
+                    success, message = generate_daily_report(
+                        crypto,
+                        st.session_state.trends,
+                        st.session_state.news,
+                        st.session_state.sentiment
+                    )
 
-                # Step 4: Send report (100%)
-                status_text.text("Sending report...")
-                try:
-                    logger.info("Sending daily report...")
-                    send_daily_report(serialized_data)
+                    # Step 3: Process Result (100%)
                     progress_bar.progress(100)
-                except Exception as e:
-                    logger.error(f"Error sending report: {str(e)}")
-                    st.error(f"Error sending report: {str(e)}")
-                    return
+                    time.sleep(0.5)  # Small delay for visual feedback
 
-                # Clear progress indicators
-                progress_bar.empty()
-                status_text.empty()
+                    # Clear progress indicators
+                    progress_placeholder.empty()
+                    status_placeholder.empty()
 
-                logger.info("Report generated and sent successfully")
-                st.success("Daily report generated and sent successfully!")
+                    # Show final status
+                    if success:
+                        success_placeholder.success(message)
+                    else:
+                        success_placeholder.error(message)
+                        st.info("Please check your connection and try again. If the issue persists, contact support.")
 
             except Exception as e:
-                logger.error(f"Error in report generation: {str(e)}", exc_info=True)
-                st.error(f"Error generating report: {str(e)}")
-                st.info("Please check your network connection and try again. If the error persists, contact support.")
+                # Ensure UI elements are cleaned up
+                progress_placeholder.empty()
+                status_placeholder.empty()
+                success_placeholder.error(f"Unexpected error: {str(e)}")
+                st.info("Please try again. If the issue persists, contact support.")
+                logger.error(f"Unexpected error in report generation UI: {str(e)}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Main application error: {str(e)}", exc_info=True)

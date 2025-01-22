@@ -17,26 +17,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Crypto Assistant"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Streamlit Server"
-
-[[workflows.workflow]]
-name = "Crypto Assistant"
-author = "agent"
-
-[workflows.workflow.metadata]
-agentRequireRestartOnSave = false
-
-[[workflows.workflow.tasks]]
-task = "packager.installForAll"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run main.py"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Streamlit Server"
