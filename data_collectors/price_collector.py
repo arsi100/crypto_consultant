@@ -7,37 +7,34 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-class BinanceClient:
-    BASE_URL = "https://api1.binance.com/api/v3"  # Using public API endpoint
+class CoinGeckoClient:
+    BASE_URL = "https://api.coingecko.com/api/v3"
 
     @staticmethod
-    def get_symbol(crypto: str) -> str:
-        """Convert crypto symbol to Binance pair format"""
-        return f"{crypto.upper()}USDT"
-
-    @staticmethod
-    def get_interval(timeframe: str) -> tuple[str, int]:
-        """Convert timeframe to Binance interval format and limit"""
-        if timeframe == "24h":
-            return "1h", 24
-        elif timeframe == "7d":
-            return "4h", 42
-        else:  # 30d
-            return "1d", 30
+    def get_coin_id(crypto: str) -> str:
+        """Convert crypto symbol to CoinGecko coin id"""
+        mapping = {
+            'BTC': 'bitcoin',
+            'ETH': 'ethereum',
+            'USDT': 'tether',
+            'BNB': 'binancecoin',
+            'SOL': 'solana'
+        }
+        return mapping.get(crypto.upper(), 'bitcoin')
 
     @classmethod
-    def get_klines(cls, symbol: str, interval: str, limit: int) -> Optional[list]:
-        """Fetch kline/candlestick data from Binance with retry logic"""
+    def get_market_chart(cls, coin_id: str, vs_currency: str, days: str) -> Optional[dict]:
+        """Fetch market chart data from CoinGecko with retry logic"""
         max_retries = 3
         retry_delay = 1
 
         for attempt in range(max_retries):
             try:
-                url = f"{cls.BASE_URL}/klines"
+                url = f"{cls.BASE_URL}/coins/{coin_id}/market_chart"
                 params = {
-                    "symbol": symbol,
-                    "interval": interval,
-                    "limit": limit
+                    "vs_currency": vs_currency,
+                    "days": days,
+                    "interval": "hourly" if days == "1" else "daily"
                 }
 
                 response = requests.get(
@@ -47,8 +44,8 @@ class BinanceClient:
                     headers={'User-Agent': 'Mozilla/5.0'}
                 )
 
-                if response.status_code == 451:
-                    logger.error("Regional restriction detected, falling back to mock data")
+                if response.status_code == 429:
+                    logger.error("Rate limit exceeded, falling back to mock data")
                     return None
 
                 response.raise_for_status()
@@ -70,10 +67,10 @@ def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
 
     if timeframe == "24h":
         periods = 24
-        freq = "H"
+        freq = "h"
     elif timeframe == "7d":
         periods = 7 * 24
-        freq = "H"
+        freq = "h"
     else:  # 30d
         periods = 30
         freq = "D"
@@ -102,27 +99,31 @@ def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
     return df[['timestamp', 'open', 'high', 'low', 'close']]
 
 def get_crypto_prices(crypto: str, timeframe: str) -> pd.DataFrame:
-    """Get cryptocurrency price data with fallback to mock data"""
+    """Get cryptocurrency price data from CoinGecko with fallback to mock data"""
     try:
-        symbol = BinanceClient.get_symbol(crypto)
-        interval, limit = BinanceClient.get_interval(timeframe)
+        coin_id = CoinGeckoClient.get_coin_id(crypto)
 
-        logger.info(f"Fetching {timeframe} price data for {symbol} from Binance")
-        klines = BinanceClient.get_klines(symbol, interval, limit)
+        # Convert timeframe to days parameter
+        days_map = {"24h": "1", "7d": "7", "30d": "30"}
+        days = days_map.get(timeframe, "1")
 
-        if klines:
-            df = pd.DataFrame(klines, columns=[
-                'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                'close_time', 'quote_volume', 'trades', 'taker_buy_volume',
-                'taker_buy_quote_volume', 'ignore'
-            ])
+        logger.info(f"Fetching {timeframe} price data for {coin_id} from CoinGecko")
+        market_data = CoinGeckoClient.get_market_chart(coin_id, "usd", days)
 
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            price_columns = ['open', 'high', 'low', 'close']
-            df[price_columns] = df[price_columns].astype(float)
+        if market_data and 'prices' in market_data:
+            # Convert price data to DataFrame
+            prices_df = pd.DataFrame(market_data['prices'], columns=['timestamp', 'close'])
+            prices_df['timestamp'] = pd.to_datetime(prices_df['timestamp'], unit='ms')
 
-            result = df[['timestamp', 'open', 'high', 'low', 'close']]
-            logger.info(f"Successfully fetched {len(result)} price points from Binance")
+            # Calculate OHLC from price data
+            # For simplicity, we'll use the same close price for open, high, and low
+            # as CoinGecko's free API doesn't provide OHLC data
+            prices_df['open'] = prices_df['close']
+            prices_df['high'] = prices_df['close']
+            prices_df['low'] = prices_df['close']
+
+            result = prices_df[['timestamp', 'open', 'high', 'low', 'close']]
+            logger.info(f"Successfully fetched {len(result)} price points from CoinGecko")
             return result
 
         logger.warning("Falling back to mock data generation")
