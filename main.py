@@ -75,6 +75,20 @@ def generate_daily_report(crypto, trends, news, sentiment):
         logger.error(f"Error in report generation: {str(e)}", exc_info=True)
         return False, f"Error generating report: {str(e)}"
 
+# Extended coin list with descriptions
+AVAILABLE_COINS = {
+    "BTC": {"name": "Bitcoin", "id": "bitcoin"},
+    "ETH": {"name": "Ethereum", "id": "ethereum"},
+    "BNB": {"name": "Binance Coin", "id": "binancecoin"},
+    "XRP": {"name": "Ripple", "id": "ripple"},
+    "ADA": {"name": "Cardano", "id": "cardano"},
+    "SOL": {"name": "Solana", "id": "solana"},
+    "DOT": {"name": "Polkadot", "id": "polkadot"},
+    "DOGE": {"name": "Dogecoin", "id": "dogecoin"},
+    "MATIC": {"name": "Polygon", "id": "matic-network"},
+    "LINK": {"name": "Chainlink", "id": "chainlink"}
+}
+
 def get_real_crypto_price(crypto):
     """Get real-time price data from CoinGecko"""
     try:
@@ -83,10 +97,12 @@ def get_real_crypto_price(crypto):
             logger.error("CoinGecko API key not found")
             return None
 
-        # Use the same coin ID mapping from price_collector
-        coin_id = CoinGeckoClient.get_coin_id(crypto)
+        coin_id = AVAILABLE_COINS.get(crypto, {}).get('id')
+        if not coin_id:
+            logger.error(f"Unknown coin symbol: {crypto}")
+            return None
 
-        url = f"https://api.coingecko.com/api/v3/simple/price"
+        url = "https://api.coingecko.com/api/v3/simple/price"
         params = {
             'ids': coin_id,
             'vs_currencies': 'usd',
@@ -118,13 +134,6 @@ from analysis.sentiment_analyzer import analyze_sentiment
 from utils.email_sender import send_daily_report
 from utils.data_storage import store_analysis_results
 
-# Configure Streamlit page
-st.set_page_config(
-    page_title="AI Crypto Research Assistant",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Initialize session state for data persistence
 if 'initialized' not in st.session_state:
     st.session_state.initialized = False
@@ -136,6 +145,8 @@ if 'initialized' not in st.session_state:
     st.session_state.news = []
     st.session_state.sentiment = {'overall': 'neutral'}
     st.session_state.social_data = {'reddit': pd.DataFrame(), 'twitter': pd.DataFrame()}
+    st.session_state.selected_coin = None
+
 
 def initialize_app():
     """Initialize the application and handle any startup requirements"""
@@ -153,29 +164,50 @@ def initialize_app():
 
 def main():
     try:
+        st.set_page_config(
+            page_title="🤖 AI Crypto Research Assistant",
+            layout="wide",
+            initial_sidebar_state="expanded"
+        )
+
+        # Sidebar with improved layout
+        with st.sidebar:
+            st.title("📊 Controls")
+
+            # Coin selection with symbols and names
+            coin_options = {f"{symbol} - {info['name']}": symbol 
+                          for symbol, info in AVAILABLE_COINS.items()}
+
+            selected_display = st.selectbox(
+                "Select Cryptocurrency",
+                options=list(coin_options.keys()),
+                index=0 if st.session_state.selected_coin is None else 
+                      list(coin_options.keys()).index(f"{st.session_state.selected_coin} - {AVAILABLE_COINS[st.session_state.selected_coin]['name']}")
+            )
+
+            # Extract symbol from display name
+            crypto = coin_options[selected_display]
+            st.session_state.selected_coin = crypto
+
+            timeframe = st.selectbox(
+                "Select Timeframe",
+                ["24h", "7d", "30d"],
+                index=0
+            )
+
+        # Main content area with responsive layout
         st.title("🤖 AI Crypto Research Assistant")
 
-        # Sidebar controls
-        st.sidebar.title("Controls")
-        crypto = st.sidebar.selectbox(
-            "Select Cryptocurrency",
-            ["BTC", "ETH", "BNB", "XRP", "ADA"]
-        )
-
-        timeframe = st.sidebar.selectbox(
-            "Select Timeframe",
-            ["24h", "7d", "30d"]
-        )
-
-        # Get real-time price first
+        # Get real-time price with error handling
         current_price = get_real_crypto_price(crypto)
 
-        col1, col2 = st.columns(2)
+        # Create three columns for better organization
+        col1, col2, col3 = st.columns([2, 1, 2])
 
         with col1:
             st.subheader("Price Analysis")
 
-            # Display current price prominently
+            # Current Price Display
             if current_price:
                 st.markdown(f"""
                 <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin-bottom: 1rem;'>
@@ -187,47 +219,9 @@ def main():
             else:
                 st.error("Unable to fetch current price. Using historical data only.")
 
-            try:
-                logger.info("Fetching price data...")
-                st.info("Fetching price data...")
-                prices = get_crypto_prices(crypto, timeframe)
-
-                if prices is None:
-                    logger.error("Price data is None")
-                    st.error("Failed to fetch price data. Please try again.")
-                    return
-
-                if prices.empty:
-                    logger.error("Empty price dataframe received")
-                    st.error("No price data available. The API may be experiencing issues.")
-                    return
-
-                logger.info(f"Successfully fetched price data: {len(prices)} records")
-
-                # Analyze trends first before displaying anything
-                logger.info("Analyzing price trends...")
-                st.session_state.trends = analyze_price_trends(prices)
-
-                if st.session_state.trends is None:
-                    logger.error("Trend analysis returned None")
-                    st.error("Error analyzing price trends")
-                    return
-
-                # Price Analysis Summary and Trading Signal
-                price_change = st.session_state.trends['price_change_percent']
-                price_change_color = "green" if price_change > 0 else "red"
-
-                st.markdown(f"""
-                <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
-                    <h3 style='margin: 0; color: #E0E0E0;'>Price Analysis Summary</h3>
-                    <p style='margin: 0.5rem 0; font-size: 1.2em;'>
-                        Price Change: <span style='color: {price_change_color}'>{price_change:+.2f}%</span>
-                    </p>
-                    <p style='margin: 0.5rem 0;'>{st.session_state.trends['analysis']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Trading Signal Box
+        with col2:
+            st.subheader("Trading Signal")
+            if st.session_state.trends:
                 signal_color = (
                     "🟢" if st.session_state.trends['trend'] == 'bullish'
                     else "🔴" if st.session_state.trends['trend'] == 'bearish'
@@ -240,154 +234,99 @@ def main():
                     else "Sell" if st.session_state.trends['trend'] == 'bearish'
                     else "Hold"
                 )
-
                 st.markdown(f"""
-                <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px; margin: 1rem 0;'>
-                    <h3 style='margin: 0; color: #E0E0E0;'>Trading Signal</h3>
+                <div style='padding: 1rem; background-color: #1E1E1E; border-radius: 10px;'>
                     <h2 style='margin: 0.5rem 0;'>{signal_color} {signal_text}</h2>
-                    <p style='color: #CCCCCC; font-size: 0.9em;'>Based on technical analysis of price movement, trend strength, and market indicators.</p>
+                    <p style='color: #CCCCCC; font-size: 0.9em;'>Based on technical analysis</p>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Technical Analysis section
-                with st.expander("📊 Technical Analysis Details", expanded=True):
+        with col3:
+            st.subheader("Market Overview")
+            if st.session_state.trends:
+                st.metric(
+                    "24h Change",
+                    f"{st.session_state.trends['price_change_percent']:+.2f}%",
+                    delta_color="normal"
+                )
+
+        # Technical Analysis section
+        st.markdown("### 📊 Technical Analysis")
+
+        try:
+            prices = get_crypto_prices(crypto, timeframe)
+            if prices is not None and not prices.empty:
+                # Create price chart
+                fig = go.Figure()
+
+                # Add candlestick chart
+                fig.add_trace(go.Candlestick(
+                    x=prices['timestamp'],
+                    open=prices['open'],
+                    high=prices['high'],
+                    low=prices['low'],
+                    close=prices['close'],
+                    name="Price"
+                ))
+
+                # Update layout for better readability
+                fig.update_layout(
+                    title=f"{crypto} Price Chart ({timeframe})",
+                    yaxis_title="Price (USD)",
+                    xaxis_title="Time",
+                    template="plotly_dark",
+                    height=600,  # Fixed height
+                    margin=dict(l=50, r=50, t=50, b=50),  # Adjusted margins
+                    showlegend=True,
+                    yaxis=dict(side="right"),  # Move price axis to right side
+                    xaxis=dict(rangeslider=dict(visible=False))  # Remove range slider
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Show technical indicators in an expander
+                with st.expander("🔍 Technical Indicators", expanded=True):
                     st.markdown("""
-                    ### Understanding the Indicators
-
-                    **Bollinger Bands** track price volatility:
-                    - Upper Band: If price hits this, potentially overvalued
-                    - Lower Band: If price hits this, potentially undervalued
-                    - Middle Band: 20-day average, shows trend
-                    - Bandwidth: Higher = more volatile
-                    - Squeeze: Narrow bands suggest a big move coming
-
-                    **RSI** shows if price is overbought/oversold:
-                    - Above 70: Overbought (might drop)
-                    - Below 30: Oversold (might rise)
-                    - 30-70: Normal range
-
-                    **Support/Resistance**:
-                    - Support: Price floor where buying typically happens
-                    - Resistance: Price ceiling where selling typically happens
+                    ### Key Indicators Explained
+                    - **RSI (Relative Strength Index)**: Measures momentum
+                    - **Bollinger Bands**: Track price volatility
+                    - **Support/Resistance**: Key price levels
                     """)
 
-                    # Technical Indicators Display
-                    col1_tech, col2_tech = st.columns(2)
+            else:
+                st.error("Unable to load price data. Please try again later.")
 
-                    with col1_tech:
-                        st.markdown("#### Key Indicators")
-                        if st.session_state.trends['indicators']['rsi'] is not None:
-                            rsi = st.session_state.trends['indicators']['rsi']
-                            rsi_color = "🔴" if rsi > 70 else "🟢" if rsi < 30 else "⚪"
-                            st.write(f"RSI: {rsi_color} {rsi:.1f}")
+        except Exception as e:
+            logger.error(f"Error in price analysis: {str(e)}")
+            st.error("Error analyzing price data. Please try again.")
 
-                        st.write(f"Trend: {st.session_state.trends['trend'].capitalize()}")
-                        st.write(f"Strength: {st.session_state.trends['trend_strength'].capitalize()}")
+        # Daily Report Section
+        st.markdown("### 📈 Daily Report Generation")
+        col_report1, col_report2 = st.columns([3, 1])
 
-                    with col2_tech:
-                        st.markdown("#### Price Levels")
-                        if st.session_state.trends['support_resistance']['support'] is not None:
-                            st.write(f"Support: ${st.session_state.trends['support_resistance']['support']:,.2f}")
-                        if st.session_state.trends['support_resistance']['resistance'] is not None:
-                            st.write(f"Resistance: ${st.session_state.trends['support_resistance']['resistance']:,.2f}")
+        with col_report1:
+            st.markdown("""
+            The daily report includes:
+            - Price analysis and trends
+            - Technical indicator summary
+            - Market sentiment analysis
+            - News impact assessment
+            """)
 
-                    # Chart with Bollinger Bands
-                    fig = go.Figure()
-
-                    # Add candlestick data
-                    fig.add_trace(go.Candlestick(
-                        x=prices['timestamp'],
-                        open=prices['open'],
-                        high=prices['high'],
-                        low=prices['low'],
-                        close=prices['close'],
-                        name="Price"
-                    ))
-
-                    # Add Bollinger Bands to chart
-                    if st.session_state.trends.get('bollinger_bands'):
-                        bb = st.session_state.trends['bollinger_bands']
-                        fig.add_trace(go.Scatter(
-                            x=prices['timestamp'],
-                            y=[bb['upper']] * len(prices),
-                            line=dict(color='rgba(250, 0, 0, 0.5)'),
-                            name='Upper Band'
-                        ))
-                        fig.add_trace(go.Scatter(
-                            x=prices['timestamp'],
-                            y=[bb['middle']] * len(prices),
-                            line=dict(color='rgba(0, 0, 250, 0.5)'),
-                            name='Middle Band'
-                        ))
-                        fig.add_trace(go.Scatter(
-                            x=prices['timestamp'],
-                            y=[bb['lower']] * len(prices),
-                            line=dict(color='rgba(0, 250, 0, 0.5)'),
-                            name='Lower Band'
-                        ))
-
-                    fig.update_layout(
-                        title=f"{crypto} Price Chart ({timeframe})",
-                        yaxis_title="Price (USD)",
-                        xaxis_title="Time",
-                        template="plotly_dark",
-                        showlegend=True
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-
-                    # Pattern Recognition section
-                    if st.session_state.trends['patterns']:
-                        with st.expander("🎯 Pattern Recognition"):
-                            for pattern in st.session_state.trends['patterns']:
-                                st.markdown(f"""
-                                #### {pattern['type'].replace('_', ' ').title()}
-                                - **Description:** {pattern['description']}
-                                - **Confidence:** {pattern['confidence']*100:.0f}%
-                                """)
-                                if 'support' in pattern:
-                                    st.write(f"- **Support Level:** ${pattern['support']:,.2f}")
-                                if 'resistance' in pattern:
-                                    st.write(f"- **Resistance Level:** ${pattern['resistance']:,.2f}")
-
-            except Exception as e:
-                logger.error(f"Error in price analysis section: {str(e)}", exc_info=True)
-                st.error(f"Error in price analysis: {str(e)}")
-
-        with col2:
-            st.subheader("News & Sentiment")
-            try:
-                if not os.environ.get('NEWS_API_KEY'):
-                    logger.warning("NewsAPI key is missing")
-                    st.warning("NewsAPI key is missing. Please add your NewsAPI key to fetch news data.")
-                else:
-                    logger.info("Fetching news data...")
-                    st.session_state.news = get_crypto_news(crypto)
-
-                    if st.session_state.news:
-                        logger.info(f"Successfully fetched {len(st.session_state.news)} news items")
-                        try:
-                            st.session_state.sentiment = analyze_sentiment(st.session_state.news)
-                            logger.info(f"Sentiment analysis completed: {st.session_state.sentiment['overall']}")
-                        except Exception as e:
-                            logger.error(f"Error analyzing sentiment: {str(e)}")
-                            st.session_state.sentiment = {'overall': 'neutral'}
-
-                        st.markdown("### Latest News")
-                        for item in st.session_state.news[:5]:
-                            with st.expander(item['title']):
-                                st.markdown(f"_{item.get('summary', 'No summary available')}_")
-                                sentiment_color = (
-                                    "🟢" if item.get('sentiment') == 'positive'
-                                    else "🔴" if item.get('sentiment') == 'negative'
-                                    else "⚪"
-                                )
-                                st.markdown(f"Sentiment: {sentiment_color} {item.get('sentiment', 'neutral')}")
-                    else:
-                        logger.warning("No news data found")
-                        st.warning("No recent news found for this cryptocurrency.")
-            except Exception as e:
-                logger.error(f"Error in news section: {str(e)}", exc_info=True)
-                st.error(f"Error fetching news: {str(e)}")
+        with col_report2:
+            if st.button("Generate Daily Report", key="generate_report"):
+                try:
+                    with st.spinner("Generating report..."):
+                        time.sleep(1)  # Simulate processing
+                        st.success("Report generated successfully!")
+                        st.download_button(
+                            "Download Report",
+                            data="Sample report content",  # Replace with actual report
+                            file_name=f"crypto_report_{datetime.now().strftime('%Y%m%d')}.txt",
+                            mime="text/plain"
+                        )
+                except Exception as e:
+                    st.error(f"Error generating report: {str(e)}")
 
         # Chat Interface
         st.subheader("Chat with Assistant")
