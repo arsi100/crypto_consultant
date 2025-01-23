@@ -336,7 +336,13 @@ def main():
 
     # Get price data and analysis
     price_data = get_real_crypto_price(st.session_state.current_coin)
-    st.session_state.price_analysis = analyze_price_trends(st.session_state.current_coin)
+
+    # Get historical prices for analysis
+    historical_prices = get_crypto_prices(st.session_state.current_coin, timeframe)
+    if historical_prices is not None and not historical_prices.empty:
+        st.session_state.price_analysis = analyze_price_trends(historical_prices)
+    else:
+        st.session_state.price_analysis = None
 
     # Layout
     col1, col2, col3 = st.columns([2, 2, 3])
@@ -344,17 +350,6 @@ def main():
     with col1:
         st.markdown("### Price")
         display_price_widget(price_data, st.session_state.current_coin)
-
-        # Add price analysis blurb
-        if st.session_state.price_analysis:
-            st.markdown(f"""
-            <div class="indicator-panel">
-                <h4 style="color: #d1d4dc;">Price Analysis</h4>
-                <div style="color: #d1d4dc;">
-                    {st.session_state.price_analysis.get('analysis', 'Analysis not available')}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
 
     with col2:
         st.markdown("### Market Overview")
@@ -372,17 +367,38 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
+            # Add price analysis blurb here
+            st.markdown(f"""
+            <div class="indicator-panel">
+                <h4 style="color: #d1d4dc;">Price Analysis</h4>
+                <div style="color: #d1d4dc;">
+                    {st.session_state.price_analysis.get('analysis', 'Analysis not available')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
     with col3:
         st.markdown("### Trend Detection")
         display_trend_detection(st.session_state.price_analysis)
 
-    # Price Chart and News Section
+    # Price Chart and Analysis Section
     st.markdown("---")
     chart_col, news_col = st.columns([3, 2])
 
     with chart_col:
         st.markdown("### Price Chart")
         display_price_chart(st.session_state.current_coin, timeframe)
+
+        # Technical Indicators
+        if st.session_state.price_analysis and st.session_state.price_analysis.get('indicators'):
+            st.markdown("### Technical Indicators")
+            indicators = st.session_state.price_analysis['indicators']
+            for name, value in indicators.items():
+                if value is not None:
+                    st.metric(
+                        label=name.upper(),
+                        value=f"{value:.2f}" if isinstance(value, float) else value
+                    )
 
     with news_col:
         st.markdown("### Latest News")
@@ -399,7 +415,15 @@ def main():
     with report_col1:
         st.markdown("### Market Intelligence")
         if st.session_state.price_analysis:
-            st.write(f"Current market sentiment: {st.session_state.price_analysis.get('market_sentiment', 'Neutral')}")
+            sentiment = st.session_state.price_analysis.get('market_sentiment', 'Neutral')
+            st.write(f"Current market sentiment: {sentiment}")
+
+            if 'support_resistance' in st.session_state.price_analysis:
+                sr_levels = st.session_state.price_analysis['support_resistance']
+                if sr_levels['support']:
+                    st.write(f"Support level: ${sr_levels['support']:,.2f}")
+                if sr_levels['resistance']:
+                    st.write(f"Resistance level: ${sr_levels['resistance']:,.2f}")
 
     with report_col2:
         if st.button("Generate Report", key="single_report_btn"):

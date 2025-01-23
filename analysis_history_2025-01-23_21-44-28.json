@@ -1,0 +1,44 @@
+{
+    "timestamp": "2025-01-23T21:44:28.984829",
+    "crypto": "SOL",
+    "price_analysis": {
+        "trend": "unknown",
+        "strength": "unknown",
+        "analysis": "No price data available for analysis",
+        "indicators": {
+            "sma_20": null,
+            "sma_50": null,
+            "rsi": null,
+            "macd": null,
+            "macd_signal": null
+        }
+    },
+    "news_sentiment": "positive",
+    "news_items": [
+        {
+            "title": "XRP, Solana Prices Rise After Report of Leaked CME Futures Addition",
+            "sentiment": "neutral",
+            "summary": "In a now deleted \"staging subdomain\" page CME reported to have said futures contracts for XRP and SOL will go live on Feb. 10."
+        },
+        {
+            "title": "Inauguration Edition: A New Reality",
+            "sentiment": "neutral",
+            "summary": "Trump's election has increased investor confidence among institutions, helping to elevate digital assets as a mainstream asset class. The question remains if this is a long-term shift or just a temporary response, says CCData\u2019s Joshua de Vos."
+        },
+        {
+            "title": "A Memecoin Revolution: Florida ETP Firm REX Shares Files For $TRUMP, $DOGE, $BONK ETFs",
+            "sentiment": "neutral",
+            "summary": "A Florida ETP provider has filed for $TRUMP, $DOGE, and $BONK ETFs, seeking to be the first issuer of memecoin ETFs in the United States \u2013 the filings were submitted just a day after Gary Genser left his Chair position at the SEC."
+        },
+        {
+            "title": "Bitcoin Pumps As Trump Grants Full, Unconditional Pardon To Silk Road's Ross Ulbricht",
+            "sentiment": "neutral",
+            "summary": "Bitcoin is up nearly 5% after Donald Trump granted a full and unconditional pardon to Ross Ulbricht, the creator of darkweb marketplace Silk Road."
+        },
+        {
+            "title": "Solana (SOL) Ignites New Momentum: Bulls Target Higher Ground",
+            "sentiment": "neutral",
+            "summary": "Solana started a fresh increase above the $240 resistance. SOL price is back above $2500 and might aim for a fresh increase above the $262 zone. SOL price started a fresh increase above the $240 and $250 levels against the US Dollar. The price is now trading \u2026"
+        }
+    ]
+}
