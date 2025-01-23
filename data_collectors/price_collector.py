@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import logging
 import time
 import os
+import numpy as np
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -36,13 +37,11 @@ class CoinGeckoClient:
                 params = {
                     "vs_currency": vs_currency,
                     "days": days,
-                    "interval": "hourly" if days == "1" else "daily",
-                    "x_cg_demo_api_key": api_key
+                    "interval": "hourly" if days == "1" else "daily"
                 }
 
                 headers = {
-                    'X-Cg-Api-Key': api_key,
-                    'User-Agent': 'CryptoIntelligence/1.0'
+                    'X-Cg-Api-Key': api_key
                 }
 
                 response = requests.get(
@@ -90,11 +89,11 @@ def get_crypto_prices(crypto: str, timeframe: str) -> pd.DataFrame:
 
         if market_data and 'prices' in market_data:
             # Convert price data to DataFrame
-            prices_df = pd.DataFrame(market_data['prices'], columns=['timestamp', 'close'])
+            prices_df = pd.DataFrame(market_data['prices'], columns=['timestamp', 'price'])
             prices_df['timestamp'] = pd.to_datetime(prices_df['timestamp'], unit='ms')
 
-            # Calculate OHLC from price data
-            ohlc = prices_df.set_index('timestamp')['close'].resample('1H' if timeframe == "24h" else '1D').ohlc()
+            # Calculate OHLC
+            ohlc = prices_df.set_index('timestamp')['price'].resample('1H' if timeframe == "24h" else '1D').ohlc()
             result = ohlc.reset_index()
 
             logger.info(f"Successfully fetched {len(result)} price points from CoinGecko")
@@ -108,39 +107,43 @@ def get_crypto_prices(crypto: str, timeframe: str) -> pd.DataFrame:
         return generate_mock_price_data(timeframe)
 
 def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
-    """Generate mock price data as fallback"""
+    """Generate realistic mock price data as fallback"""
     now = datetime.now()
 
     if timeframe == "24h":
         periods = 24
-        freq = "h"
+        freq = "H"
+        volatility = 0.02
     elif timeframe == "7d":
         periods = 7 * 24
-        freq = "h"
+        freq = "H"
+        volatility = 0.03
     else:  # 30d
         periods = 30
         freq = "D"
+        volatility = 0.05
 
     timestamps = pd.date_range(end=now, periods=periods, freq=freq)
-    base_price = 45000  # Base BTC price
-    volatility = 0.02   # 2% price movement
 
-    prices = []
-    current_price = base_price
+    # Generate more realistic price movements using random walk
+    returns = np.random.normal(loc=0, scale=volatility, size=periods)
+    price = 45000  # Base price for BTC
+    prices = price * np.exp(np.cumsum(returns))
 
-    for _ in range(periods):
-        change = current_price * (2 * volatility * (0.5 - time.time() % 1))
-        current_price += change
+    # Generate OHLC data
+    data = []
+    for i in range(len(timestamps)):
+        current_price = prices[i]
+        high_low_spread = current_price * volatility
 
-        open_price = current_price
-        high_price = current_price * (1 + volatility/2)
-        low_price = current_price * (1 - volatility/2)
-        close_price = current_price * (1 + (time.time() % 1 - 0.5) * volatility)
+        open_price = current_price * (1 + np.random.uniform(-volatility/2, volatility/2))
+        high_price = max(open_price, current_price) + abs(np.random.normal(0, high_low_spread/2))
+        low_price = min(open_price, current_price) - abs(np.random.normal(0, high_low_spread/2))
+        close_price = current_price
 
-        prices.append([open_price, high_price, low_price, close_price])
+        data.append([timestamps[i], open_price, high_price, low_price, close_price])
 
-    df = pd.DataFrame(prices, columns=['open', 'high', 'low', 'close'])
-    df['timestamp'] = timestamps
+    df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close'])
 
     logger.info(f"Generated {len(df)} mock price points")
-    return df[['timestamp', 'open', 'high', 'low', 'close']]
+    return df
