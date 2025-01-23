@@ -79,16 +79,30 @@ def get_real_crypto_price(crypto):
     """Get real-time price data from CoinGecko"""
     try:
         api_key = os.environ.get('COINGECKO_API_KEY')
+        if not api_key:
+            logger.error("CoinGecko API key not found")
+            return None
+
+        # Use the same coin ID mapping from price_collector
+        coin_id = CoinGeckoClient.get_coin_id(crypto)
+
         url = f"https://api.coingecko.com/api/v3/simple/price"
         params = {
-            'ids': 'bitcoin' if crypto == 'BTC' else crypto.lower(),
+            'ids': coin_id,
             'vs_currencies': 'usd',
             'x_cg_demo_api_key': api_key
         }
-        response = requests.get(url, params=params)
+
+        headers = {
+            'X-Cg-Api-Key': api_key,
+            'User-Agent': 'CryptoIntelligence/1.0'
+        }
+
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+
         if response.status_code == 200:
             data = response.json()
-            return data[crypto.lower()]['usd']
+            return data[coin_id]['usd']
         else:
             logger.error(f"CoinGecko API error: {response.status_code}")
             return None
@@ -96,7 +110,7 @@ def get_real_crypto_price(crypto):
         logger.error(f"Error fetching real-time price: {str(e)}")
         return None
 
-from data_collectors.price_collector import get_crypto_prices
+from data_collectors.price_collector import get_crypto_prices, CoinGeckoClient # Assuming CoinGeckoClient is defined here
 from data_collectors.news_collector import get_crypto_news
 from data_collectors.social_collector import get_social_data
 from analysis.price_analyzer import analyze_price_trends
