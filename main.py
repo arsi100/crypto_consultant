@@ -252,14 +252,20 @@ def display_trend_detection(price_analysis):
             for pattern in price_analysis['patterns'][:3]
         ])
 
+        trend = price_analysis.get('trend', 'unknown').title()
+        trend_strength = price_analysis.get('trend_strength', 'unknown').title()
+
         st.markdown(f"""
         <div class="indicator-panel">
             <h4 style="color: #d1d4dc;">Emerging Patterns</h4>
             <div style="color: #d1d4dc;">
-                {patterns_html}
+                {patterns_html if patterns_html else "No patterns detected"}
             </div>
-            <div style="color: #888888; font-size: 0.9rem; margin-top: 0.5rem;">
-                {price_analysis.get('trend_strength', 'neutral').title()} {price_analysis.get('trend', 'neutral').title()} Trend
+            <div style="margin-top: 1rem;">
+                <h4 style="color: #d1d4dc;">Current Trend</h4>
+                <div style="color: #d1d4dc;">
+                    {trend_strength} {trend}
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -307,49 +313,56 @@ def main():
     if 'price_analysis' not in st.session_state:
         st.session_state.price_analysis = None
 
-    # Sidebar
+    # Sidebar controls
     with st.sidebar:
         st.title("📊 Controls")
-
-        # Coin selection
         coin_options = {f"{symbol} - {info['name']}": symbol 
                       for symbol, info in AVAILABLE_COINS.items()}
-
         selected_display = st.selectbox(
             "Select Cryptocurrency",
             options=list(coin_options.keys()),
             key='coin_selector'
         )
-
         selected_coin = coin_options[selected_display]
         st.session_state.current_coin = selected_coin
-
-        # Timeframe
         timeframe = st.selectbox(
             "Timeframe",
             ["24h", "7d", "30d"],
             key='timeframe_selector'
         )
 
-    # Main content
     st.title("CryptoAI Platform")
 
     # Get price data and analysis
     price_data = get_real_crypto_price(st.session_state.current_coin)
-
-    # Get historical prices for analysis
     historical_prices = get_crypto_prices(st.session_state.current_coin, timeframe)
+
     if historical_prices is not None and not historical_prices.empty:
         st.session_state.price_analysis = analyze_price_trends(historical_prices)
     else:
         st.session_state.price_analysis = None
 
-    # Layout
+    # Top section layout
     col1, col2, col3 = st.columns([2, 2, 3])
 
     with col1:
         st.markdown("### Price")
         display_price_widget(price_data, st.session_state.current_coin)
+
+        # Move analysis here
+        if st.session_state.price_analysis:
+            st.markdown("""
+            <div style="height: 20px;"></div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+            <div class="indicator-panel">
+                <h4 style="color: #d1d4dc;">Price Analysis</h4>
+                <div style="color: #d1d4dc;">
+                    {st.session_state.price_analysis.get('analysis', 'Analysis not available')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     with col2:
         st.markdown("### Market Overview")
@@ -363,16 +376,6 @@ def main():
                 <div style="color: {signal_color}; font-size: 1.2rem;">{signal}</div>
                 <div style="color: #d1d4dc; font-size: 0.9rem;">
                     Confidence: {st.session_state.price_analysis.get('confidence', 0)*100:.0f}%
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Add price analysis blurb here
-            st.markdown(f"""
-            <div class="indicator-panel">
-                <h4 style="color: #d1d4dc;">Price Analysis</h4>
-                <div style="color: #d1d4dc;">
-                    {st.session_state.price_analysis.get('analysis', 'Analysis not available')}
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -404,19 +407,22 @@ def main():
         st.markdown("### Latest News")
         display_news_section(st.session_state.current_coin)
 
-    # Chat Interface Section
+    # Market Intelligence Section
     st.markdown("---")
-    chat_interface()
+    intel_col1, intel_col2 = st.columns([4, 1])
 
-    # Report Generation Section
-    st.markdown("---")
-    report_col1, report_col2 = st.columns([4, 1])
-
-    with report_col1:
+    with intel_col1:
         st.markdown("### Market Intelligence")
         if st.session_state.price_analysis:
             sentiment = st.session_state.price_analysis.get('market_sentiment', 'Neutral')
-            st.write(f"Current market sentiment: {sentiment}")
+            st.markdown(f"""
+            <div class="indicator-panel">
+                <h4 style="color: #d1d4dc;">Market Overview</h4>
+                <div style="color: #d1d4dc;">
+                    <p>Current Market Sentiment: {sentiment}</p>
+                    <p>24h Price Change: {st.session_state.price_analysis.get('price_change_percent', 0):.2f}%</p>
+                </div>
+            """, unsafe_allow_html=True)
 
             if 'support_resistance' in st.session_state.price_analysis:
                 sr_levels = st.session_state.price_analysis['support_resistance']
@@ -425,7 +431,9 @@ def main():
                 if sr_levels['resistance']:
                     st.write(f"Resistance level: ${sr_levels['resistance']:,.2f}")
 
-    with report_col2:
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with intel_col2:
         if st.button("Generate Report", key="single_report_btn"):
             try:
                 with st.spinner("Generating comprehensive analysis..."):
@@ -441,6 +449,11 @@ def main():
                         st.error(message)
             except Exception as e:
                 st.error(f"Error generating report: {str(e)}")
+
+    # Chat Interface Section
+    st.markdown("---")
+    chat_interface()
+
 
 if __name__ == "__main__":
     main()
