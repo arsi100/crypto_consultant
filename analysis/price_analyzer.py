@@ -25,36 +25,25 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         'patterns': [],
         'bollinger_bands': None,
         'analysis': 'No price data available for analysis',
-        'price_change_percent': 0.0
+        'price_change_percent': 0.0,
+        'market_sentiment': 'Neutral',
+        'signal': 'HOLD',
+        'confidence': 0.0
     }
-
-    # Validate input data
-    if price_data is None or not isinstance(price_data, pd.DataFrame):
-        print("Invalid price data format")
-        return default_response
-
-    if price_data.empty or len(price_data) < 2:  # Need at least 2 points for analysis
-        print("Insufficient price data points")
-        return default_response
 
     try:
         # Calculate basic technical indicators
         close_prices = price_data['close']
 
-        # Ensure we have numeric data
-        if not pd.to_numeric(close_prices, errors='coerce').notna().all():
-            print("Non-numeric values found in close prices")
-            return default_response
-
         # Simple Moving Averages
-        sma_20 = close_prices.rolling(window=min(20, len(close_prices))).mean()
-        sma_50 = close_prices.rolling(window=min(50, len(close_prices))).mean()
+        sma_20 = close_prices.rolling(window=20).mean()
+        sma_50 = close_prices.rolling(window=50).mean()
 
-        # Relative Strength Index (RSI)
+        # RSI
         delta = close_prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=min(14, len(close_prices))).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=min(14, len(close_prices))).mean()
-        rs = gain / loss.replace(0, np.inf)  # Handle division by zero
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
 
         # MACD
@@ -63,7 +52,7 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
 
-        # Get current values
+        # Current values
         current_price = close_prices.iloc[-1]
         current_sma_20 = sma_20.iloc[-1]
         current_sma_50 = sma_50.iloc[-1]
@@ -75,78 +64,80 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         pattern_analysis = analyze_patterns(price_data)
 
         # Determine trend and momentum
-        try:
-            price_change = ((current_price - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
-        except (IndexError, ZeroDivisionError):
-            print("Error calculating price change")
-            price_change = 0
+        price_change = ((current_price - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
 
-        # Default to unknown if moving averages are not available
+        # Trend analysis
         trend = 'unknown'
         trend_strength = 'unknown'
+        confidence = 0.0
+        signal = 'HOLD'
 
         if not pd.isna(current_sma_20) and not pd.isna(current_sma_50):
-            trend_strength = 'strong' if abs(current_price - current_sma_20) / current_sma_20 > 0.02 else 'moderate'
+            price_deviation = abs(current_price - current_sma_20) / current_sma_20
+            trend_strength = 'strong' if price_deviation > 0.02 else 'moderate'
+
             if current_price > current_sma_20 > current_sma_50:
                 trend = 'bullish'
+                confidence = min(price_deviation * 5, 0.95)
+                signal = 'BUY' if price_deviation > 0.03 else 'HOLD'
             elif current_price < current_sma_20 < current_sma_50:
                 trend = 'bearish'
+                confidence = min(price_deviation * 5, 0.95)
+                signal = 'SELL' if price_deviation > 0.03 else 'HOLD'
             else:
                 trend = 'sideways'
+                confidence = 0.5
+                signal = 'HOLD'
 
         # Generate analysis text
-        analysis = f"Price is showing a {trend_strength} {trend} trend"
+        analysis = f"The market is showing a {trend_strength} {trend} trend"
+
         if price_change != 0:
             analysis += f" with {abs(price_change):.2f}% {'increase' if price_change > 0 else 'decrease'}"
 
         if not pd.isna(current_rsi):
             if current_rsi > 70:
-                analysis += ". Market is currently overbought (RSI > 70). Consider potential price correction"
+                analysis += ". Market is currently overbought (RSI > 70)"
+                if trend == 'bullish':
+                    analysis += ". Consider taking profits"
             elif current_rsi < 30:
-                analysis += ". Market is currently oversold (RSI < 30). Watch for potential reversal"
-            else:
-                analysis += f". RSI is neutral at {current_rsi:.1f}"
+                analysis += ". Market is currently oversold (RSI < 30)"
+                if trend == 'bearish':
+                    analysis += ". Watch for potential reversal"
 
         if not pd.isna(current_macd) and not pd.isna(current_signal):
             if current_macd > current_signal:
-                analysis += ". MACD indicates bullish momentum building up"
+                analysis += ". MACD indicates bullish momentum"
             else:
-                analysis += ". MACD suggests momentum may be weakening"
+                analysis += ". MACD suggests bearish pressure"
 
-        # Add pattern analysis to the report
+        # Add pattern analysis
         if pattern_analysis['patterns']:
-            analysis += "\n\nDetected patterns:"
-            for pattern in pattern_analysis['patterns']:
-                analysis += f"\n• {pattern['description']} (Confidence: {pattern['confidence']:.0%})"
-
-        # Add Bollinger Bands analysis
-        if pattern_analysis['bollinger_bands']:
-            bb = pattern_analysis['bollinger_bands']
-            current_bb_position = (current_price - bb['lower']) / (bb['upper'] - bb['lower'])
-
-            if current_bb_position > 0.95:
-                analysis += "\n• Price is near upper Bollinger Band - potential resistance"
-            elif current_bb_position < 0.05:
-                analysis += "\n• Price is near lower Bollinger Band - potential support"
+            analysis += "\nDetected patterns:"
+            for pattern in pattern_analysis['patterns'][:2]:
+                analysis += f"\n• {pattern['description']}"
 
         result = {
             'trend': trend,
             'trend_strength': trend_strength,
+            'signal': signal,
+            'confidence': confidence,
             'indicators': {
-                'sma_20': round(float(current_sma_20), 2) if not pd.isna(current_sma_20) else None,
-                'sma_50': round(float(current_sma_50), 2) if not pd.isna(current_sma_50) else None,
-                'rsi': round(float(current_rsi), 2) if not pd.isna(current_rsi) else None,
-                'macd': round(float(current_macd), 4) if not pd.isna(current_macd) else None,
-                'macd_signal': round(float(current_signal), 4) if not pd.isna(current_signal) else None
+                'sma_20': float(current_sma_20) if not pd.isna(current_sma_20) else None,
+                'sma_50': float(current_sma_50) if not pd.isna(current_sma_50) else None,
+                'rsi': float(current_rsi) if not pd.isna(current_rsi) else None,
+                'macd': float(current_macd) if not pd.isna(current_macd) else None,
+                'macd_signal': float(current_signal) if not pd.isna(current_signal) else None
             },
             'patterns': pattern_analysis['patterns'],
             'bollinger_bands': pattern_analysis['bollinger_bands'],
             'support_resistance': {
-                'support': round(pattern_analysis['bollinger_bands']['lower'], 2) if pattern_analysis['bollinger_bands'] else None,
-                'resistance': round(pattern_analysis['bollinger_bands']['upper'], 2) if pattern_analysis['bollinger_bands'] else None
+                'support': float(pattern_analysis['bollinger_bands']['lower']) if pattern_analysis['bollinger_bands'] else None,
+                'resistance': float(pattern_analysis['bollinger_bands']['upper']) if pattern_analysis['bollinger_bands'] else None
             },
             'analysis': analysis,
-            'price_change_percent': round(price_change, 2)
+            'price_change_percent': float(price_change),
+            'market_sentiment': 'Bullish' if trend == 'bullish' else 'Bearish' if trend == 'bearish' else 'Neutral'
         }
 
         return result
