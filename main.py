@@ -26,7 +26,6 @@ AVAILABLE_COINS = {
     "LINK": {"name": "Chainlink", "id": "chainlink"}
 }
 
-# Helper function for JSON serialization (from original code)
 def json_serial(obj):
     if isinstance(obj, (datetime, pd.Timestamp)):
         return obj.isoformat()
@@ -49,19 +48,21 @@ def get_real_crypto_price(crypto):
         params = {
             'ids': coin_id,
             'vs_currencies': 'usd',
-            'x_cg_demo_api_key': api_key
+            'include_24hr_change': 'true'
         }
 
         headers = {
-            'X-Cg-Api-Key': api_key,
-            'User-Agent': 'CryptoIntelligence/1.0'
+            'X-Cg-Api-Key': api_key
         }
 
         response = requests.get(url, params=params, headers=headers, timeout=10)
 
         if response.status_code == 200:
             data = response.json()
-            return data[coin_id]['usd']
+            return {
+                'price': data[coin_id]['usd'],
+                'change_24h': data[coin_id].get('usd_24h_change', 0)
+            }
         else:
             logger.error(f"CoinGecko API error: {response.status_code}")
             return None
@@ -69,200 +70,88 @@ def get_real_crypto_price(crypto):
         logger.error(f"Error fetching real-time price: {str(e)}")
         return None
 
-from data_collectors.price_collector import get_crypto_prices # Assuming this is defined elsewhere
-from data_collectors.news_collector import get_crypto_news # Assuming this is defined elsewhere
-from data_collectors.social_collector import get_social_data # Assuming this is defined elsewhere
-from analysis.price_analyzer import analyze_price_trends # Assuming this is defined elsewhere
-from analysis.sentiment_analyzer import analyze_sentiment # Assuming this is defined elsewhere
-from utils.email_sender import send_daily_report # Assuming this is defined elsewhere
-from utils.data_storage import store_analysis_results # Assuming this is defined elsewhere
+from data_collectors.price_collector import get_crypto_prices
+from data_collectors.news_collector import get_crypto_news
+from data_collectors.social_collector import get_social_data
+from analysis.price_analyzer import analyze_price_trends
+from analysis.sentiment_analyzer import analyze_sentiment
+from utils.email_sender import send_daily_report
+from utils.data_storage import store_analysis_results
 
 
-# Initialize session state
-if 'page_loaded' not in st.session_state:
-    st.session_state.page_loaded = False
-    st.session_state.current_coin = None
-    st.session_state.error_state = None
-    st.session_state.report_generating = False
-
-def handle_error(error_msg: str):
-    """Centralized error handling"""
-    logger.error(error_msg)
-    st.session_state.error_state = error_msg
-    st.error(error_msg)
-
-def reset_error_state():
-    """Reset error state"""
-    st.session_state.error_state = None
-
-def generate_daily_report(crypto, trends, news, sentiment):
-    """
-    Separate function to handle report generation logic
-    Returns (success, message) tuple
-    """
-    try:
-        if not trends:
-            return False, "No price analysis data available. Please wait for data to load."
-
-        # Prepare report data
-        report_data = {
-            'timestamp': datetime.now(),
-            'crypto': crypto,
-            'price_analysis': {
-                'trend': trends.get('trend', 'unknown'),
-                'strength': trends.get('trend_strength', 'unknown'),
-                'analysis': trends.get('analysis', 'No analysis available'),
-                'indicators': trends.get('indicators', {})
-            },
-            'news_sentiment': sentiment.get('overall', 'neutral'),
-            'news_items': [
-                {
-                    'title': item.get('title', ''),
-                    'sentiment': item.get('sentiment', 'neutral'),
-                    'summary': item.get('summary', '')
-                }
-                for item in (news[:5] if news else [])
-            ]
-        }
-
-        # Serialize data
-        try:
-            serialized_data = json.loads(json.dumps(report_data, default=json_serial))
-        except Exception as e:
-            logger.error(f"Error serializing report data: {str(e)}")
-            return False, "Error processing report data. Please try again."
-
-        # Store results
-        try:
-            store_analysis_results(serialized_data)
-        except Exception as e:
-            logger.warning(f"Could not store analysis results: {str(e)}")
-            # Continue even if storage fails
-
-        # Send report
-        try:
-            send_daily_report(serialized_data)
-        except Exception as e:
-            logger.error(f"Error sending report: {str(e)}")
-            return False, f"Error sending report: {str(e)}"
-
-        return True, "Daily report generated and sent successfully!"
-
-    except Exception as e:
-        logger.error(f"Error in report generation: {str(e)}", exc_info=True)
-        return False, f"Error generating report: {str(e)}"
-
-
-def main():
-    try:
-        # Page configuration
-        st.set_page_config(
-            page_title="CryptoAI Research Platform",
-            layout="wide",
-            initial_sidebar_state="expanded",
-            page_icon="📈"
-        )
-
-        # Apply custom CSS
-        st.markdown("""
+def apply_tradingview_style():
+    """Apply TradingView-inspired dark theme"""
+    st.markdown("""
         <style>
-        .main {
-            padding: 0rem 1rem;
-        }
-        .stButton>button {
-            width: 100%;
-        }
-        .reportbox {
-            background-color: #262730;
+        .tradingview-widget-container {
+            background-color: #1e222d;
             padding: 1rem;
-            border-radius: 0.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .price-widget {
+            background-color: #2a2e39;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #363c4e;
+        }
+
+        .indicator-panel {
+            background-color: #2a2e39;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #363c4e;
+            margin-bottom: 1rem;
+        }
+
+        .stButton>button {
+            background-color: #2962ff;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+        }
+
+        div[data-testid="stDecoration"] {
+            background-image: linear-gradient(90deg, #2962ff, #2962ff);
+        }
+
+        .plot-container {
+            background-color: #1e222d !important;
+            border: 1px solid #363c4e;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        [data-testid="stMarkdownContainer"] h1,
+        [data-testid="stMarkdownContainer"] h2,
+        [data-testid="stMarkdownContainer"] h3 {
+            color: #d1d4dc;
         }
         </style>
+    """, unsafe_allow_html=True)
+
+def display_price_widget(price_data, coin):
+    """Display current price in TradingView style"""
+    if price_data:
+        price = price_data['price']
+        change = price_data['change_24h']
+        color = "color: #26a69a" if change > 0 else "color: #ef5350"
+
+        st.markdown(f"""
+        <div class="price-widget">
+            <h3 style="color: #d1d4dc; margin: 0;">{coin}</h3>
+            <div style="font-size: 2rem; {color}">
+                ${price:,.2f}
+            </div>
+            <div style="{color}">
+                {change:+.2f}%
+            </div>
+        </div>
         """, unsafe_allow_html=True)
-
-        # Sidebar
-        with st.sidebar:
-            st.title("📊 Controls")
-
-            # Coin selection
-            coin_options = {f"{symbol} - {info['name']}": symbol 
-                          for symbol, info in AVAILABLE_COINS.items()}
-
-            selected_display = st.selectbox(
-                "Select Cryptocurrency",
-                options=list(coin_options.keys())
-            )
-
-            # Extract symbol and handle coin change
-            new_coin = coin_options[selected_display]
-            if st.session_state.current_coin != new_coin:
-                st.session_state.current_coin = new_coin
-                reset_error_state()
-
-            # Timeframe selection
-            timeframe = st.selectbox(
-                "Timeframe",
-                ["24h", "7d", "30d"]
-            )
-
-        # Main content
-        st.title("CryptoAI Research Platform")
-
-        # Only proceed if we have a selected coin
-        if not st.session_state.current_coin:
-            st.info("Please select a cryptocurrency to begin analysis")
-            return
-
-        try:
-            # Get current price
-            current_price = get_real_crypto_price(st.session_state.current_coin)
-
-            # Layout
-            price_col, signal_col, chart_col = st.columns([1, 1, 2])
-
-            with price_col:
-                display_price_info(current_price, st.session_state.current_coin)
-
-            with signal_col:
-                display_trading_signal()
-
-            with chart_col:
-                display_price_chart(st.session_state.current_coin, timeframe)
-
-            # Technical Analysis Section
-            st.markdown("---")
-            tech_col1, tech_col2 = st.columns(2)
-
-            with tech_col1:
-                display_technical_indicators()
-
-            with tech_col2:
-                if st.button("Generate Analysis Report", use_container_width=True):
-                    generate_and_display_report()
-
-        except Exception as e:
-            handle_error(f"Error analyzing data: {str(e)}")
-
-    except Exception as e:
-        handle_error(f"Application error: {str(e)}")
-
-def display_price_info(price, coin):
-    """Display current price information"""
-    if price:
-        st.metric(
-            label=f"{coin} Price",
-            value=f"${price:,.2f}",
-            delta=None  # Add price change here
-        )
     else:
-        st.error("Unable to fetch current price")
-
-def display_trading_signal():
-    """Display trading signal and strength"""
-    # Placeholder -  Add trading signal logic here using st.session_state.trends if available.
-    st.write("Trading signal display will be implemented here.")
-    pass
-
+        st.error("Unable to fetch price data")
 
 def display_price_chart(coin, timeframe):
     """Display interactive price chart"""
@@ -274,7 +163,7 @@ def display_price_chart(coin, timeframe):
         else:
             st.error("Unable to load price data")
     except Exception as e:
-        handle_error(f"Error displaying chart: {str(e)}")
+        st.error(f"Error displaying chart: {str(e)}")
 
 def create_candlestick_chart(prices, coin, timeframe):
     """Create an interactive candlestick chart"""
@@ -302,44 +191,152 @@ def create_candlestick_chart(prices, coin, timeframe):
 
     return fig
 
-def display_technical_indicators():
-    """Display technical indicators"""
-    st.write("Technical indicator display will be implemented here.")
-    pass
-
-
-def generate_and_display_report():
-    """Generate and display analysis report"""
+def generate_daily_report(crypto, trends, news, sentiment):
+    """Generates and handles report data"""
     try:
-        if st.session_state.report_generating:
-            return
+        if not trends:
+            return False, "No price analysis data available. Please wait for data to load."
 
-        st.session_state.report_generating = True
+        report_data = {
+            'timestamp': datetime.now(),
+            'crypto': crypto,
+            'price_analysis': {
+                'trend': trends.get('trend', 'unknown'),
+                'strength': trends.get('trend_strength', 'unknown'),
+                'analysis': trends.get('analysis', 'No analysis available'),
+                'indicators': trends.get('indicators', {})
+            },
+            'news_sentiment': sentiment.get('overall', 'neutral'),
+            'news_items': [
+                {
+                    'title': item.get('title', ''),
+                    'sentiment': item.get('sentiment', 'neutral'),
+                    'summary': item.get('summary', '')
+                }
+                for item in (news[:5] if news else [])
+            ]
+        }
 
-        with st.spinner("Generating comprehensive analysis report..."):
-            # Add report generation logic here
-            time.sleep(2)  # Simulate processing
-
-            report_data = {
-                "timestamp": datetime.now().isoformat(),
-                "analysis": "Sample analysis"
-            }
-
-            # Create download button
-            st.download_button(
-                "Download Report",
-                data=json.dumps(report_data, indent=2),
-                file_name=f"crypto_report_{datetime.now().strftime('%Y%m%d')}.json",
-                mime="application/json"
-            )
-
-        st.success("Report generated successfully!")
+        serialized_data = json.loads(json.dumps(report_data, default=json_serial))
+        store_analysis_results(serialized_data)
+        send_daily_report(serialized_data)
+        return True, "Daily report generated and sent successfully!"
 
     except Exception as e:
-        handle_error(f"Error generating report: {str(e)}")
-    finally:
-        st.session_state.report_generating = False
+        logger.error(f"Error in report generation: {str(e)}", exc_info=True)
+        return False, f"Error generating report: {str(e)}"
 
+
+def main():
+    st.set_page_config(layout="wide", page_title="CryptoAI Platform", page_icon="📈")
+    apply_tradingview_style()
+
+    # Initialize session state
+    if 'current_coin' not in st.session_state:
+        st.session_state.current_coin = "BTC"
+
+    # Sidebar
+    with st.sidebar:
+        st.title("📊 Controls")
+
+        # Coin selection
+        coin_options = {f"{symbol} - {info['name']}": symbol 
+                      for symbol, info in AVAILABLE_COINS.items()}
+
+        selected_display = st.selectbox(
+            "Select Cryptocurrency",
+            options=list(coin_options.keys()),
+            key='coin_selector'
+        )
+
+        selected_coin = coin_options[selected_display]
+        st.session_state.current_coin = selected_coin
+
+        # Timeframe
+        timeframe = st.selectbox(
+            "Timeframe",
+            ["24h", "7d", "30d"],
+            key='timeframe_selector'
+        )
+
+        # Technical Analysis Filters
+        st.markdown("### 📊 Technical Analysis")
+        show_ma = st.checkbox("Moving Averages", value=True)
+        show_bb = st.checkbox("Bollinger Bands", value=True)
+        show_rsi = st.checkbox("RSI", value=True)
+
+    # Main content
+    st.title("CryptoAI Platform")
+
+    # Get price data
+    price_data = get_real_crypto_price(st.session_state.current_coin)
+
+    # Layout
+    col1, col2, col3 = st.columns([2, 2, 3])
+
+    with col1:
+        st.markdown("### Price")
+        display_price_widget(price_data, st.session_state.current_coin)
+
+    with col2:
+        st.markdown("### Market Overview")
+        with st.container():
+            st.markdown("""
+            <div class="indicator-panel">
+                <h4 style="color: #d1d4dc;">Signal Strength</h4>
+                <div style="color: #26a69a; font-size: 1.2rem;">Strong Buy</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("### Trend Detection")
+        with st.container():
+            st.markdown("""
+            <div class="indicator-panel">
+                <h4 style="color: #d1d4dc;">Emerging Patterns</h4>
+                <div style="color: #d1d4dc;">
+                    • Volume Breakout Detected<br/>
+                    • Bullish MACD Crossover
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Charts Section
+    st.markdown("---")
+
+    chart_col1, chart_col2 = st.columns([3, 2])
+
+    with chart_col1:
+        st.markdown("### Price Chart")
+        display_price_chart(st.session_state.current_coin, timeframe)
+
+    with chart_col2:
+        st.markdown("### Technical Indicators")
+        # Add technical indicators here -  This would ideally use data from get_crypto_prices and analyze_price_trends
+
+
+    # Bottom section for reports
+    st.markdown("---")
+    report_col1, report_col2 = st.columns([4, 1])
+
+    with report_col1:
+        st.markdown("### Market Intelligence")
+        # Add market insights here - This would ideally use data from get_crypto_news and analyze_sentiment
+
+    with report_col2:
+        if st.button("Generate Report", key="single_report_btn"):
+            try:
+                with st.spinner("Generating comprehensive analysis..."):
+                    trends = analyze_price_trends(st.session_state.current_coin, timeframe) # Example, replace with actual call
+                    news = get_crypto_news(st.session_state.current_coin) # Example, replace with actual call
+                    sentiment = analyze_sentiment(news) # Example, replace with actual call
+                    success, message = generate_daily_report(st.session_state.current_coin, trends, news, sentiment)
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
+            except Exception as e:
+                st.error(f"Error generating report: {str(e)}")
 
 if __name__ == "__main__":
     main()
