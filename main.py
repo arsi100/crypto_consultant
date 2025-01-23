@@ -26,10 +26,56 @@ AVAILABLE_COINS = {
     "LINK": {"name": "Chainlink", "id": "chainlink"}
 }
 
-def json_serial(obj):
-    if isinstance(obj, (datetime, pd.Timestamp)):
-        return obj.isoformat()
-    raise TypeError(f"Type {type(obj)} not serializable")
+def apply_tradingview_style():
+    """Apply TradingView-inspired dark theme"""
+    st.markdown("""
+        <style>
+        .tradingview-widget-container {
+            background-color: #1e222d;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .price-widget {
+            background-color: #2a2e39;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #363c4e;
+        }
+
+        .indicator-panel {
+            background-color: #2a2e39;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #363c4e;
+            margin-bottom: 1rem;
+        }
+
+        .news-panel {
+            background-color: #2a2e39;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #363c4e;
+            margin-bottom: 1rem;
+        }
+
+        .stButton>button {
+            background-color: #2962ff;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+        }
+
+        .plot-container {
+            background-color: #1e222d !important;
+            border: 1px solid #363c4e;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
 def get_real_crypto_price(crypto):
     """Get real-time price data from CoinGecko"""
@@ -70,68 +116,6 @@ def get_real_crypto_price(crypto):
         logger.error(f"Error fetching real-time price: {str(e)}")
         return None
 
-from data_collectors.price_collector import get_crypto_prices
-from data_collectors.news_collector import get_crypto_news
-from data_collectors.social_collector import get_social_data
-from analysis.price_analyzer import analyze_price_trends
-from analysis.sentiment_analyzer import analyze_sentiment
-from utils.email_sender import send_daily_report
-from utils.data_storage import store_analysis_results
-
-
-def apply_tradingview_style():
-    """Apply TradingView-inspired dark theme"""
-    st.markdown("""
-        <style>
-        .tradingview-widget-container {
-            background-color: #1e222d;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-        }
-
-        .price-widget {
-            background-color: #2a2e39;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid #363c4e;
-        }
-
-        .indicator-panel {
-            background-color: #2a2e39;
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid #363c4e;
-            margin-bottom: 1rem;
-        }
-
-        .stButton>button {
-            background-color: #2962ff;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-        }
-
-        div[data-testid="stDecoration"] {
-            background-image: linear-gradient(90deg, #2962ff, #2962ff);
-        }
-
-        .plot-container {
-            background-color: #1e222d !important;
-            border: 1px solid #363c4e;
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
-        [data-testid="stMarkdownContainer"] h1,
-        [data-testid="stMarkdownContainer"] h2,
-        [data-testid="stMarkdownContainer"] h3 {
-            color: #d1d4dc;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
 def display_price_widget(price_data, coin):
     """Display current price in TradingView style"""
     if price_data:
@@ -153,17 +137,25 @@ def display_price_widget(price_data, coin):
     else:
         st.error("Unable to fetch price data")
 
-def display_price_chart(coin, timeframe):
-    """Display interactive price chart"""
+def display_news_section(crypto):
+    """Display news with sentiment analysis"""
     try:
-        prices = get_crypto_prices(coin, timeframe)
-        if prices is not None and not prices.empty:
-            fig = create_candlestick_chart(prices, coin, timeframe)
-            st.plotly_chart(fig, use_container_width=True)
+        news = get_crypto_news(crypto)
+        if news:
+            sentiment = analyze_sentiment(news)
+            for item in news[:5]:  # Display top 5 news items
+                sentiment_color = (
+                    "🟢" if item.get('sentiment') == 'positive'
+                    else "🔴" if item.get('sentiment') == 'negative'
+                    else "⚪"
+                )
+                with st.expander(f"{sentiment_color} {item['title']}"):
+                    st.write(item.get('summary', 'No summary available'))
+                    st.write(f"Published: {item.get('published_at', 'N/A')}")
         else:
-            st.error("Unable to load price data")
+            st.info("No recent news available")
     except Exception as e:
-        st.error(f"Error displaying chart: {str(e)}")
+        st.error(f"Error loading news: {str(e)}")
 
 def create_candlestick_chart(prices, coin, timeframe):
     """Create an interactive candlestick chart"""
@@ -190,6 +182,19 @@ def create_candlestick_chart(prices, coin, timeframe):
     )
 
     return fig
+
+def display_price_chart(coin, timeframe):
+    """Display interactive price chart"""
+    try:
+        prices = get_crypto_prices(coin, timeframe)
+        if prices is not None and not prices.empty:
+            fig = create_candlestick_chart(prices, coin, timeframe)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.error("Unable to load price data")
+    except Exception as e:
+        st.error(f"Error displaying chart: {str(e)}")
+
 
 def generate_daily_report(crypto, trends, news, sentiment):
     """Generates and handles report data"""
@@ -226,6 +231,19 @@ def generate_daily_report(crypto, trends, news, sentiment):
         logger.error(f"Error in report generation: {str(e)}", exc_info=True)
         return False, f"Error generating report: {str(e)}"
 
+def json_serial(obj):
+    if isinstance(obj, (datetime, pd.Timestamp)):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+from data_collectors.price_collector import get_crypto_prices
+from data_collectors.news_collector import get_crypto_news
+from data_collectors.social_collector import get_social_data
+from analysis.price_analyzer import analyze_price_trends
+from analysis.sentiment_analyzer import analyze_sentiment
+from utils.email_sender import send_daily_report
+from utils.data_storage import store_analysis_results
+
 
 def main():
     st.set_page_config(layout="wide", page_title="CryptoAI Platform", page_icon="📈")
@@ -259,17 +277,12 @@ def main():
             key='timeframe_selector'
         )
 
-        # Technical Analysis Filters
-        st.markdown("### 📊 Technical Analysis")
-        show_ma = st.checkbox("Moving Averages", value=True)
-        show_bb = st.checkbox("Bollinger Bands", value=True)
-        show_rsi = st.checkbox("RSI", value=True)
-
     # Main content
     st.title("CryptoAI Platform")
 
-    # Get price data
+    # Get price data and analysis
     price_data = get_real_crypto_price(st.session_state.current_coin)
+    price_analysis = analyze_price_trends(st.session_state.current_coin)
 
     # Layout
     col1, col2, col3 = st.columns([2, 2, 3])
@@ -278,42 +291,61 @@ def main():
         st.markdown("### Price")
         display_price_widget(price_data, st.session_state.current_coin)
 
+        # Add price analysis blurb
+        if price_analysis:
+            st.markdown(f"""
+            <div class="indicator-panel">
+                <h4 style="color: #d1d4dc;">Price Analysis</h4>
+                <div style="color: #d1d4dc;">
+                    {price_analysis.get('analysis', 'Analysis not available')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
     with col2:
         st.markdown("### Market Overview")
-        with st.container():
-            st.markdown("""
+        if price_analysis:
+            signal = price_analysis.get('signal', 'HOLD')
+            signal_color = "#26a69a" if signal == "BUY" else "#ef5350" if signal == "SELL" else "#888888"
+
+            st.markdown(f"""
             <div class="indicator-panel">
                 <h4 style="color: #d1d4dc;">Signal Strength</h4>
-                <div style="color: #26a69a; font-size: 1.2rem;">Strong Buy</div>
+                <div style="color: {signal_color}; font-size: 1.2rem;">{signal}</div>
+                <div style="color: #d1d4dc; font-size: 0.9rem;">
+                    Confidence: {price_analysis.get('confidence', 0)*100:.0f}%
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
     with col3:
         st.markdown("### Trend Detection")
-        with st.container():
-            st.markdown("""
+        if price_analysis and price_analysis.get('patterns'):
+            patterns_html = "".join([
+                f"• {pattern['type'].replace('_', ' ').title()}<br/>"
+                for pattern in price_analysis['patterns'][:3]
+            ])
+
+            st.markdown(f"""
             <div class="indicator-panel">
                 <h4 style="color: #d1d4dc;">Emerging Patterns</h4>
                 <div style="color: #d1d4dc;">
-                    • Volume Breakout Detected<br/>
-                    • Bullish MACD Crossover
+                    {patterns_html}
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-    # Charts Section
+    # Price Chart Section
     st.markdown("---")
+    chart_col, news_col = st.columns([3, 2])
 
-    chart_col1, chart_col2 = st.columns([3, 2])
-
-    with chart_col1:
+    with chart_col:
         st.markdown("### Price Chart")
         display_price_chart(st.session_state.current_coin, timeframe)
 
-    with chart_col2:
-        st.markdown("### Technical Indicators")
-        # Add technical indicators here -  This would ideally use data from get_crypto_prices and analyze_price_trends
-
+    with news_col:
+        st.markdown("### Latest News")
+        display_news_section(st.session_state.current_coin)
 
     # Bottom section for reports
     st.markdown("---")
