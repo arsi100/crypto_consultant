@@ -244,6 +244,58 @@ from analysis.sentiment_analyzer import analyze_sentiment
 from utils.email_sender import send_daily_report
 from utils.data_storage import store_analysis_results
 
+def display_trend_detection(price_analysis):
+    """Display trend detection with pattern analysis"""
+    if price_analysis and price_analysis.get('patterns'):
+        patterns_html = "".join([
+            f"• {pattern['type'].replace('_', ' ').title()}: {pattern.get('confidence', 0)*100:.0f}% confidence<br/>"
+            for pattern in price_analysis['patterns'][:3]
+        ])
+
+        st.markdown(f"""
+        <div class="indicator-panel">
+            <h4 style="color: #d1d4dc;">Emerging Patterns</h4>
+            <div style="color: #d1d4dc;">
+                {patterns_html}
+            </div>
+            <div style="color: #888888; font-size: 0.9rem; margin-top: 0.5rem;">
+                {price_analysis.get('trend_strength', 'neutral').title()} {price_analysis.get('trend', 'neutral').title()} Trend
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+def chat_interface():
+    """Display chat interface for user queries"""
+    st.subheader("💬 Chat Assistant")
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    user_question = st.text_input(
+        "Ask about market trends, technical analysis, or news impact:",
+        key="chat_input"
+    )
+
+    if user_question:
+        if st.session_state.current_coin and st.session_state.price_analysis:
+            response = f"Analysis for {st.session_state.current_coin}:\n\n"
+
+            # Add price analysis
+            if 'trend' in st.session_state.price_analysis:
+                response += f"📈 Current Trend: {st.session_state.price_analysis['trend'].title()}\n"
+                response += f"💪 Trend Strength: {st.session_state.price_analysis['trend_strength'].title()}\n\n"
+
+            # Add technical indicators
+            if 'indicators' in st.session_state.price_analysis:
+                indicators = st.session_state.price_analysis['indicators']
+                response += "Technical Indicators:\n"
+                for indicator, value in indicators.items():
+                    response += f"• {indicator.upper()}: {value}\n"
+
+            st.write(response)
+            st.session_state.chat_history.append((user_question, response))
+        else:
+            st.warning("Please select a cryptocurrency first to get analysis.")
 
 def main():
     st.set_page_config(layout="wide", page_title="CryptoAI Platform", page_icon="📈")
@@ -252,6 +304,8 @@ def main():
     # Initialize session state
     if 'current_coin' not in st.session_state:
         st.session_state.current_coin = "BTC"
+    if 'price_analysis' not in st.session_state:
+        st.session_state.price_analysis = None
 
     # Sidebar
     with st.sidebar:
@@ -282,7 +336,7 @@ def main():
 
     # Get price data and analysis
     price_data = get_real_crypto_price(st.session_state.current_coin)
-    price_analysis = analyze_price_trends(st.session_state.current_coin)
+    st.session_state.price_analysis = analyze_price_trends(st.session_state.current_coin)
 
     # Layout
     col1, col2, col3 = st.columns([2, 2, 3])
@@ -292,20 +346,20 @@ def main():
         display_price_widget(price_data, st.session_state.current_coin)
 
         # Add price analysis blurb
-        if price_analysis:
+        if st.session_state.price_analysis:
             st.markdown(f"""
             <div class="indicator-panel">
                 <h4 style="color: #d1d4dc;">Price Analysis</h4>
                 <div style="color: #d1d4dc;">
-                    {price_analysis.get('analysis', 'Analysis not available')}
+                    {st.session_state.price_analysis.get('analysis', 'Analysis not available')}
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
     with col2:
         st.markdown("### Market Overview")
-        if price_analysis:
-            signal = price_analysis.get('signal', 'HOLD')
+        if st.session_state.price_analysis:
+            signal = st.session_state.price_analysis.get('signal', 'HOLD')
             signal_color = "#26a69a" if signal == "BUY" else "#ef5350" if signal == "SELL" else "#888888"
 
             st.markdown(f"""
@@ -313,29 +367,16 @@ def main():
                 <h4 style="color: #d1d4dc;">Signal Strength</h4>
                 <div style="color: {signal_color}; font-size: 1.2rem;">{signal}</div>
                 <div style="color: #d1d4dc; font-size: 0.9rem;">
-                    Confidence: {price_analysis.get('confidence', 0)*100:.0f}%
+                    Confidence: {st.session_state.price_analysis.get('confidence', 0)*100:.0f}%
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
     with col3:
         st.markdown("### Trend Detection")
-        if price_analysis and price_analysis.get('patterns'):
-            patterns_html = "".join([
-                f"• {pattern['type'].replace('_', ' ').title()}<br/>"
-                for pattern in price_analysis['patterns'][:3]
-            ])
+        display_trend_detection(st.session_state.price_analysis)
 
-            st.markdown(f"""
-            <div class="indicator-panel">
-                <h4 style="color: #d1d4dc;">Emerging Patterns</h4>
-                <div style="color: #d1d4dc;">
-                    {patterns_html}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Price Chart Section
+    # Price Chart and News Section
     st.markdown("---")
     chart_col, news_col = st.columns([3, 2])
 
@@ -347,22 +388,29 @@ def main():
         st.markdown("### Latest News")
         display_news_section(st.session_state.current_coin)
 
-    # Bottom section for reports
+    # Chat Interface Section
+    st.markdown("---")
+    chat_interface()
+
+    # Report Generation Section
     st.markdown("---")
     report_col1, report_col2 = st.columns([4, 1])
 
     with report_col1:
         st.markdown("### Market Intelligence")
-        # Add market insights here - This would ideally use data from get_crypto_news and analyze_sentiment
+        if st.session_state.price_analysis:
+            st.write(f"Current market sentiment: {st.session_state.price_analysis.get('market_sentiment', 'Neutral')}")
 
     with report_col2:
         if st.button("Generate Report", key="single_report_btn"):
             try:
                 with st.spinner("Generating comprehensive analysis..."):
-                    trends = analyze_price_trends(st.session_state.current_coin, timeframe) # Example, replace with actual call
-                    news = get_crypto_news(st.session_state.current_coin) # Example, replace with actual call
-                    sentiment = analyze_sentiment(news) # Example, replace with actual call
-                    success, message = generate_daily_report(st.session_state.current_coin, trends, news, sentiment)
+                    success, message = generate_daily_report(
+                        st.session_state.current_coin,
+                        st.session_state.price_analysis,
+                        get_crypto_news(st.session_state.current_coin),
+                        analyze_sentiment(get_crypto_news(st.session_state.current_coin))
+                    )
                     if success:
                         st.success(message)
                     else:
