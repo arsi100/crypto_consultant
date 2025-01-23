@@ -1,74 +1,96 @@
 import requests
-import trafilatura
 from typing import List, Dict
 from datetime import datetime, timedelta
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_crypto_news(symbol: str) -> List[Dict]:
     """
-    Collect crypto news from NewsAPI (Free tier - 100 requests/day)
+    Collect crypto news from CoinGecko API
     """
     news_items = []
 
     # Get API key from environment
-    api_key = os.environ.get('NEWS_API_KEY')
+    api_key = os.environ.get('COINGECKO_API_KEY')
     if not api_key:
-        print("NewsAPI key not found in environment variables. Please provide a NewsAPI key.")
+        logger.error("CoinGecko API key not found in environment variables")
         return []
 
-    # NewsAPI endpoint
-    news_api_url = "https://newsapi.org/v2/everything"
-    params = {
-        'q': f"cryptocurrency {symbol}",
-        'from': (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
-        'sortBy': 'popularity',
-        'language': 'en',
-        'pageSize': 10,  # Limit results to conserve daily quota
-        'apiKey': api_key
+    # Convert symbol to CoinGecko coin ID
+    coin_mapping = {
+        'BTC': 'bitcoin',
+        'ETH': 'ethereum',
+        'BNB': 'binancecoin',
+        'XRP': 'ripple',
+        'ADA': 'cardano',
+        'SOL': 'solana',
+        'DOT': 'polkadot',
+        'DOGE': 'dogecoin',
+        'MATIC': 'matic-network',
+        'LINK': 'chainlink'
+    }
+
+    coin_id = coin_mapping.get(symbol.upper())
+    if not coin_id:
+        logger.error(f"Unsupported coin symbol: {symbol}")
+        return []
+
+    # CoinGecko API endpoint for news
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/status_updates"
+
+    headers = {
+        'X-Cg-Api-Key': api_key
     }
 
     try:
-        response = requests.get(news_api_url, params=params)
+        response = requests.get(url, headers=headers, timeout=10)
 
-        # Handle rate limiting and errors
         if response.status_code == 429:
-            print("NewsAPI rate limit reached. Please try again later.")
+            logger.error("CoinGecko API rate limit reached")
             return []
         elif response.status_code == 401:
-            print("Invalid NewsAPI key. Please check your API key.")
+            logger.error("Invalid CoinGecko API key")
             return []
 
         response.raise_for_status()
         data = response.json()
 
-        if data.get('status') != 'ok':
-            print(f"NewsAPI error: {data.get('message', 'Unknown error')}")
-            return []
-
-        for article in data.get('articles', []):
-            content = article['description']
-            if article['url']:
-                try:
-                    downloaded = trafilatura.fetch_url(article['url'])
-                    if downloaded:
-                        extracted = trafilatura.extract(downloaded)
-                        if extracted:
-                            content = extracted
-                except Exception as e:
-                    print(f"Error extracting article content: {e}")
-
+        # Process status updates (news)
+        for update in data.get('status_updates', [])[:10]:  # Limit to 10 most recent updates
             news_items.append({
-                'title': article['title'],
-                'summary': article['description'],
-                'content': content,
-                'url': article['url'],
-                'published_at': article['publishedAt'],
-                'source': article['source']['name']
+                'title': update.get('description', '').split('\n')[0],  # First line as title
+                'summary': update.get('description', ''),
+                'content': update.get('description', ''),
+                'url': update.get('project', {}).get('link', ''),
+                'published_at': update.get('created_at', ''),
+                'source': 'CoinGecko'
             })
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching news: {e}")
-    except Exception as e:
-        print(f"Unexpected error in news collection: {e}")
+        # If we have space for more news, fetch from the markets endpoint
+        if len(news_items) < 10:
+            market_url = "https://api.coingecko.com/api/v3/news"
+            market_response = requests.get(market_url, headers=headers, timeout=10)
 
-    return news_items
+            if market_response.status_code == 200:
+                market_news = market_response.json()
+                for article in market_news[:10 - len(news_items)]:
+                    if coin_id.lower() in article.get('title', '').lower():
+                        news_items.append({
+                            'title': article.get('title', ''),
+                            'summary': article.get('description', ''),
+                            'content': article.get('text', ''),
+                            'url': article.get('url', ''),
+                            'published_at': article.get('published_at', ''),
+                            'source': article.get('author', 'CoinGecko')
+                        })
+
+        return news_items
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching news from CoinGecko: {str(e)}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error in news collection: {str(e)}")
+        return []
