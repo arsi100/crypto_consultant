@@ -140,22 +140,36 @@ def display_price_widget(price_data, coin):
 def display_news_section(crypto):
     """Display news with sentiment analysis"""
     try:
-        news = get_crypto_news(crypto)
-        if news:
-            sentiment = analyze_sentiment(news)
-            for item in news[:5]:  # Display top 5 news items
-                sentiment_color = (
-                    "🟢" if item.get('sentiment') == 'positive'
-                    else "🔴" if item.get('sentiment') == 'negative'
-                    else "⚪"
-                )
-                with st.expander(f"{sentiment_color} {item['title']}"):
-                    st.write(item.get('summary', 'No summary available'))
-                    st.write(f"Published: {item.get('published_at', 'N/A')}")
-        else:
-            st.info("No recent news available")
+        # Add loading state
+        with st.spinner('Fetching latest news...'):
+            news = get_crypto_news(crypto)
+
+            if news:
+                # Get sentiment analysis
+                sentiment = analyze_sentiment(news)
+
+                for item in news[:5]:  # Display top 5 news items
+                    # Determine sentiment icon
+                    sentiment_color = (
+                        "🟢" if item.get('sentiment') == 'positive'
+                        else "🔴" if item.get('sentiment') == 'negative'
+                        else "⚪"
+                    )
+
+                    with st.expander(f"{sentiment_color} {item['title']}"):
+                        st.markdown(f"""
+                        <div style='color: #d1d4dc;'>
+                            {item.get('summary', 'No summary available')}
+                            <br><br>
+                            <small>Source: {item.get('source', 'Unknown')} • 
+                            Published: {item.get('published_at', 'N/A')}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No recent news available. Please try again later.")
     except Exception as e:
-        st.error(f"Error loading news: {str(e)}")
+        st.error(f"Unable to fetch news at the moment. Please try again later.")
+        logger.error(f"Error in display_news_section: {str(e)}")
 
 def create_candlestick_chart(prices, coin, timeframe):
     """Create an interactive candlestick chart"""
@@ -194,6 +208,7 @@ def display_price_chart(coin, timeframe):
             st.error("Unable to load price data")
     except Exception as e:
         st.error(f"Error displaying chart: {str(e)}")
+
 
 
 def generate_daily_report(crypto, trends, news, sentiment):
@@ -306,6 +321,11 @@ def chat_interface():
 def main():
     st.set_page_config(layout="wide", page_title="CryptoAI Platform", page_icon="📈")
     apply_tradingview_style()
+
+    # Check for required API keys
+    if not os.environ.get('COINGECKO_API_KEY'):
+        st.error("CoinGecko API key is missing. Please add it to continue.")
+        return
 
     # Initialize session state
     if 'current_coin' not in st.session_state:
