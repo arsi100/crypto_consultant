@@ -3,12 +3,23 @@ import logging
 from typing import Dict, Any, List, Optional
 import pandas as pd
 from openai import OpenAI
+import time
 
 logger = logging.getLogger(__name__)
 
 class AIAnalyzer:
     def __init__(self):
         self.client = OpenAI()
+        self.last_request_time = 0
+        self.min_request_interval = 1  # Minimum time between requests in seconds
+
+    def _rate_limit(self):
+        """Implement simple rate limiting"""
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+        if time_since_last_request < self.min_request_interval:
+            time.sleep(self.min_request_interval - time_since_last_request)
+        self.last_request_time = time.time()
 
     def _format_number(self, value: Optional[float], format_str: str = ",.2f") -> str:
         """Safely format numbers with null checking"""
@@ -22,6 +33,8 @@ class AIAnalyzer:
     def analyze_price_data(self, price_data: pd.DataFrame, timeframe: str) -> Dict[str, Any]:
         """Analyze price data using OpenAI to generate insights"""
         try:
+            # Rate limit check
+            self._rate_limit()
             # Calculate basic metrics
             latest_price = price_data['close'].iloc[-1] if not price_data.empty else None
             first_price = price_data['close'].iloc[0] if not price_data.empty else None

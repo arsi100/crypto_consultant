@@ -28,7 +28,7 @@ class CoinGeckoClient:
     def get_market_chart(cls, coin_id: str, vs_currency: str, days: str) -> Optional[dict]:
         """Fetch market chart data from CoinGecko with retry logic"""
         max_retries = 3
-        retry_delay = 1
+        retry_delay = 2  # Increased from 1 to 2 seconds
         api_key = os.environ.get('COINGECKO_API_KEY', '').strip()
 
         if not api_key:
@@ -45,7 +45,7 @@ class CoinGeckoClient:
                 }
 
                 headers = {
-                    'x-cg-api-key': api_key  # Changed from 'X-Cg-Api-Key' to lowercase
+                    'X-CG-API-Key': api_key  # Fixed header name to match CoinGecko's requirements
                 }
 
                 response = requests.get(
@@ -63,7 +63,7 @@ class CoinGeckoClient:
                     return None
 
                 if response.status_code == 401:
-                    logger.error(f"Unauthorized - Invalid API key: {api_key[:5]}...")
+                    logger.error("Unauthorized - Invalid CoinGecko API key")
                     return None
 
                 response.raise_for_status()
