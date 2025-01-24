@@ -6,6 +6,7 @@ import os
 import time
 import json
 import logging
+import requests # Added missing import for requests
 from data_collectors.price_collector import get_crypto_prices
 from data_collectors.news_collector import get_crypto_news
 from data_collectors.social_collector import get_social_data
@@ -151,11 +152,11 @@ def display_price_widget(price_data, coin):
         color = "color: #26a69a" if change > 0 else "color: #ef5350"
 
         st.markdown(f"""
-        <div class="tradingview-widget-container">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
+        <div class="tradingview-widget-container" style="min-width: 300px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 1rem;">
+                <div style="width: 100%;">
                     <h3 style="color: #d1d4dc; margin: 0;">{AVAILABLE_COINS[coin]['name']} ({coin})</h3>
-                    <div style="font-size: 2rem; margin: 0.5rem 0; {color}">
+                    <div style="font-size: 2.5rem; margin: 0.5rem 0; {color}; word-wrap: break-word;">
                         ${price:,.2f}
                     </div>
                     <div style="{color}">
@@ -169,59 +170,51 @@ def display_price_widget(price_data, coin):
         st.error("Unable to fetch price data")
 
 def display_trend_detection(price_analysis):
-    """Display trend detection with pattern analysis in a more informal way"""
+    """Display trend detection with more user-friendly language"""
     if price_analysis:
-        trend = price_analysis.get('trend', 'unknown').title()
-        trend_strength = price_analysis.get('trend_strength', 'unknown').title()
-        confidence = price_analysis.get('confidence', 0) * 100
-
-        # More informal market analysis
         st.markdown("""
         <div class="tradingview-widget-container">
-            <h4 style="color: #d1d4dc;">💡 Quick Market Take</h4>
+            <h4 style="color: #d1d4dc;">💡 Market Summary</h4>
         """, unsafe_allow_html=True)
 
+        # Convert technical analysis to more casual language
         analysis = price_analysis.get('analysis', '')
-        # Make the analysis more conversational
-        analysis = analysis.replace('market structure', 'market behavior')
-        analysis = analysis.replace('technical analysis', 'market signals')
+        analysis = analysis.replace('Head and Shoulders', 'reversal pattern')
+        analysis = analysis.replace('technical indicators', 'market signals')
+        analysis = analysis.replace('resistance levels', 'price ceilings')
+        analysis = analysis.replace('support levels', 'price floors')
+        analysis = analysis.replace('bullish', 'upward')
+        analysis = analysis.replace('bearish', 'downward')
 
         st.markdown(f"""
-            <div style="color: #d1d4dc; margin-bottom: 1rem;">
+            <div style="color: #d1d4dc; margin-bottom: 1rem; font-size: 1.1rem; line-height: 1.5;">
                 {analysis}
             </div>
         """, unsafe_allow_html=True)
 
-        if price_analysis.get('patterns'):
-            st.markdown("""
-            <h4 style="color: #d1d4dc; margin-top: 1rem;">📊 Chart Patterns</h4>
-            """, unsafe_allow_html=True)
-
-            for pattern in price_analysis['patterns'][:3]:
-                confidence = pattern.get('confidence', 0) * 100
-                st.markdown(f"""
-                <div style="color: #d1d4dc; margin: 0.5rem 0;">
-                    • {pattern['type'].replace('_', ' ').title()}: {confidence:.0f}% confidence
-                </div>
-                """, unsafe_allow_html=True)
-
-        # Add support/resistance levels
+        # Show key price levels in a more friendly way
         if 'support_resistance' in price_analysis:
             sr_levels = price_analysis['support_resistance']
-            if isinstance(sr_levels.get('support'), (list, tuple)):
+            if isinstance(sr_levels.get('support'), (list, tuple)) and isinstance(sr_levels.get('resistance'), (list, tuple)):
+                st.markdown("""
+                <h4 style="color: #d1d4dc; margin-top: 1rem;">🎯 Key Price Points</h4>
+                """, unsafe_allow_html=True)
+
                 support_levels = sr_levels['support']
                 resistance_levels = sr_levels['resistance']
 
-                st.markdown("""
-                <h4 style="color: #d1d4dc; margin-top: 1rem;">🎯 Key Price Levels</h4>
-                """, unsafe_allow_html=True)
-
-                for i, (support, resistance) in enumerate(zip(support_levels, resistance_levels)):
+                # Only show the first two levels
+                for i, (support, resistance) in enumerate(zip(support_levels[:2], resistance_levels[:2])):
                     st.markdown(f"""
-                    <div style="color: #d1d4dc;">
-                        Support #{i+1}: ${support:,.2f}
-                        <br>
-                        Resistance #{i+1}: ${resistance:,.2f}
+                    <div style="color: #d1d4dc; margin: 0.5rem 0;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Price Floor #{i+1}:</span>
+                            <span style="color: #26a69a">${support:,.2f}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Price Ceiling #{i+1}:</span>
+                            <span style="color: #ef5350">${resistance:,.2f}</span>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -229,19 +222,24 @@ def display_trend_detection(price_analysis):
 
 def display_trending_coins():
     """Display trending coins section"""
-    st.markdown("### 🔥 Trending Coins")
+    st.markdown("""
+    <div class="tradingview-widget-container">
+        <h3 style="color: #d1d4dc;">🔥 Trending Coins</h3>
+    </div>
+    """, unsafe_allow_html=True)
 
     try:
         # Initialize trending collector
         trending_collector = TrendingCollector()
 
-        # Add refresh button
-        if st.button("🔄 Refresh Trending", key="refresh_trending"):
-            with st.spinner("Updating trending coins..."):
-                if trending_collector.update_trending_coins():
-                    st.success("Trending coins updated!")
-                else:
-                    st.error("Failed to update trending coins")
+        # Add refresh button with improved styling
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            refresh_clicked = st.button("🔄 Refresh", key="refresh_trending", help="Update trending coins data")
+
+        if refresh_clicked:
+            with st.spinner("Getting fresh market trends..."):
+                trending_collector.update_trending_coins()
 
         # Get trending coins using a database session
         with db.get_session() as session:
@@ -249,7 +247,7 @@ def display_trending_coins():
 
             if trending_coins:
                 for coin in trending_coins:
-                    with st.expander(f"#{coin.market_cap_rank} {coin.name} ({coin.symbol})", expanded=False):
+                    with st.expander(f"#{coin.market_cap_rank} {coin.name} ({coin.symbol.upper()})", expanded=False):
                         col1, col2 = st.columns([1, 3])
 
                         with col1:
@@ -257,25 +255,29 @@ def display_trending_coins():
                                 st.image(coin.coin_metadata['small'], width=50)
 
                         with col2:
+                            color = "#26a69a" if coin.score > 0.5 else "#ef5350"
                             st.markdown(f"""
-                            <div class="tradingview-widget-container">
-                                <div style="color: #d1d4dc;">
-                                    <strong>Market Cap Rank:</strong> {coin.market_cap_rank if coin.market_cap_rank else 'N/A'}
-                                    <br>
-                                    <strong>Price (BTC):</strong> {coin.price_btc:.8f} BTC
-                                    <br>
-                                    <strong>Trending Score:</strong> {coin.score}
-                                    <br>
-                                    <strong>Last Updated:</strong> {coin.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
+                            <div style="color: #d1d4dc; padding: 0.5rem;">
+                                <div style="margin-bottom: 0.5rem;">
+                                    <strong>Rank:</strong> {coin.market_cap_rank if coin.market_cap_rank else 'N/A'}
+                                </div>
+                                <div style="margin-bottom: 0.5rem;">
+                                    <strong>Price:</strong> ₿ {coin.price_btc:.8f}
+                                </div>
+                                <div style="margin-bottom: 0.5rem; color: {color};">
+                                    <strong>Trending Score:</strong> {coin.score:.2f}
+                                </div>
+                                <div style="font-size: 0.8rem; color: #666;">
+                                    Updated: {coin.timestamp.strftime('%I:%M %p UTC')}
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
             else:
-                st.info("No trending coins available. Click refresh to fetch the latest trends.")
+                st.info("👀 No trending coins yet. Hit refresh to see what's hot!")
 
     except Exception as e:
         logger.error(f"Error in trending coins section: {str(e)}")
-        st.error("Unable to load trending coins at the moment")
+        st.error("Unable to load trending coins. Please try refreshing in a moment.")
 
 def create_candlestick_chart(prices, coin, timeframe):
     """Create an interactive candlestick chart"""
