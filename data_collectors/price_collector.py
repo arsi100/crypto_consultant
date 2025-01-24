@@ -29,7 +29,11 @@ class CoinGeckoClient:
         """Fetch market chart data from CoinGecko with retry logic"""
         max_retries = 3
         retry_delay = 1
-        api_key = os.environ.get('COINGECKO_API_KEY')
+        api_key = os.environ.get('COINGECKO_API_KEY', '').strip()
+
+        if not api_key:
+            logger.error("CoinGecko API key not found")
+            return None
 
         for attempt in range(max_retries):
             try:
@@ -41,7 +45,7 @@ class CoinGeckoClient:
                 }
 
                 headers = {
-                    'X-Cg-Api-Key': api_key
+                    'x-cg-api-key': api_key  # Changed from 'X-Cg-Api-Key' to lowercase
                 }
 
                 response = requests.get(
@@ -52,14 +56,14 @@ class CoinGeckoClient:
                 )
 
                 if response.status_code == 429:
-                    logger.error("Rate limit exceeded")
+                    logger.warning(f"Rate limit exceeded (attempt {attempt + 1}/{max_retries})")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delay * (attempt + 1))
                         continue
                     return None
 
                 if response.status_code == 401:
-                    logger.error("Unauthorized - Invalid API key")
+                    logger.error(f"Unauthorized - Invalid API key: {api_key[:5]}...")
                     return None
 
                 response.raise_for_status()
@@ -93,30 +97,41 @@ def get_crypto_prices(crypto: str, timeframe: str) -> pd.DataFrame:
             prices_df['timestamp'] = pd.to_datetime(prices_df['timestamp'], unit='ms')
 
             # Calculate OHLC
-            ohlc = prices_df.set_index('timestamp')['price'].resample('1H' if timeframe == "24h" else '1D').ohlc()
+            ohlc = prices_df.set_index('timestamp')['price'].resample('1h' if timeframe == "24h" else '1D').ohlc()
             result = ohlc.reset_index()
 
             logger.info(f"Successfully fetched {len(result)} price points from CoinGecko")
             return result
 
         logger.warning("Falling back to mock data generation")
-        return generate_mock_price_data(timeframe)
+        return generate_mock_price_data(timeframe, crypto)
 
     except Exception as e:
         logger.error(f"Error in get_crypto_prices: {str(e)}")
-        return generate_mock_price_data(timeframe)
+        return generate_mock_price_data(timeframe, crypto)
 
-def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
-    """Generate realistic mock price data as fallback"""
+def generate_mock_price_data(timeframe: str, crypto: str) -> pd.DataFrame:
+    """Generate realistic mock price data as fallback based on current market prices"""
     now = datetime.now()
+
+    # More realistic base prices for different cryptocurrencies
+    base_prices = {
+        'BTC': 106000,  # Updated to current approximate price
+        'ETH': 3200,
+        'USDT': 1,
+        'BNB': 300,
+        'SOL': 100
+    }
+
+    base_price = base_prices.get(crypto.upper(), 100)  # Default to 100 if unknown
 
     if timeframe == "24h":
         periods = 24
-        freq = "H"
+        freq = "h"
         volatility = 0.02
     elif timeframe == "7d":
         periods = 7 * 24
-        freq = "H"
+        freq = "h"
         volatility = 0.03
     else:  # 30d
         periods = 30
@@ -127,8 +142,7 @@ def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
 
     # Generate more realistic price movements using random walk
     returns = np.random.normal(loc=0, scale=volatility, size=periods)
-    price = 45000  # Base price for BTC
-    prices = price * np.exp(np.cumsum(returns))
+    prices = base_price * np.exp(np.cumsum(returns))
 
     # Generate OHLC data
     data = []
@@ -144,6 +158,5 @@ def generate_mock_price_data(timeframe: str) -> pd.DataFrame:
         data.append([timestamps[i], open_price, high_price, low_price, close_price])
 
     df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close'])
-
-    logger.info(f"Generated {len(df)} mock price points")
+    logger.info(f"Generated {len(df)} mock price points for {crypto}")
     return df
