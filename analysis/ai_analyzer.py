@@ -43,34 +43,37 @@ class AIAnalyzer:
 
             # Get AI analysis
             response = self.client.chat.completions.create(
-                model="gpt-4",  # Using GPT-4 for advanced analysis
+                model="gpt-4",
                 messages=[
                     {
                         "role": "system",
                         "content": """You are an expert cryptocurrency analyst. Analyze the provided price data and generate comprehensive insights. 
-                        Include: market trend analysis, pattern recognition, support/resistance levels, and trading signals.
-                        Respond in JSON format with the following structure:
+                        Format your response as a valid JSON string with the following structure:
                         {
-                            "trend": string (bullish/bearish/neutral),
-                            "trend_strength": string (strong/moderate/weak),
-                            "analysis": string (detailed analysis),
-                            "patterns": [{"type": string, "confidence": float}],
-                            "support_resistance": {"support": float, "resistance": float},
-                            "signal": string (BUY/SELL/HOLD),
-                            "confidence": float (0-1),
-                            "market_sentiment": string
-                        }"""
+                            "trend": "bullish/bearish/neutral",
+                            "trend_strength": "strong/moderate/weak",
+                            "analysis": "detailed analysis text",
+                            "patterns": [{"type": "pattern name", "confidence": 0.95}],
+                            "support_resistance": {"support": 45000, "resistance": 48000},
+                            "signal": "BUY/SELL/HOLD",
+                            "confidence": 0.85,
+                            "market_sentiment": "bullish/bearish/neutral"
+                        }
+                        Only respond with the JSON object, no additional text."""
                     },
                     {"role": "user", "content": data_summary}
-                ],
-                response_format={"type": "json_object"}
+                ]
             )
 
             # Parse and validate AI analysis
             analysis = response.choices[0].message.content
-            if isinstance(analysis, str):
+            try:
                 import json
-                analysis = json.loads(analysis)
+                if isinstance(analysis, str):
+                    analysis = json.loads(analysis)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse AI response as JSON: {e}")
+                analysis = {}
 
             return {
                 **analysis,
@@ -96,7 +99,6 @@ class AIAnalyzer:
     def analyze_patterns(self, price_data: pd.DataFrame) -> List[Dict[str, Any]]:
         """Identify and analyze price patterns using AI"""
         try:
-            # Calculate price movements and volatility
             if price_data.empty:
                 return []
 
@@ -116,23 +118,30 @@ class AIAnalyzer:
                     {
                         "role": "system",
                         "content": """Analyze the price data for common trading patterns. 
-                        Return a JSON array of identified patterns with confidence levels.
-                        Each pattern should include:
+                        Respond with a valid JSON string in this format:
                         {
-                            "type": string (pattern name),
-                            "confidence": float (0-1),
-                            "description": string
-                        }"""
+                            "patterns": [
+                                {
+                                    "type": "pattern name",
+                                    "confidence": 0.95,
+                                    "description": "pattern description"
+                                }
+                            ]
+                        }
+                        Only respond with the JSON object, no additional text."""
                     },
                     {"role": "user", "content": data_description}
-                ],
-                response_format={"type": "json_object"}
+                ]
             )
 
+            # Parse and validate response
             analysis = response.choices[0].message.content
-            if isinstance(analysis, str):
-                import json
-                analysis = json.loads(analysis)
+            try:
+                if isinstance(analysis, str):
+                    analysis = json.loads(analysis)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse pattern analysis response as JSON: {e}")
+                return []
 
             return analysis.get("patterns", [])
 
