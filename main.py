@@ -6,7 +6,7 @@ import os
 import time
 import json
 import logging
-import requests # Added missing import for requests
+import requests 
 from data_collectors.price_collector import get_crypto_prices
 from data_collectors.news_collector import get_crypto_news
 from data_collectors.social_collector import get_social_data
@@ -50,8 +50,23 @@ def apply_tradingview_style():
         }
 
         /* Sidebar styling */
-        .css-1d391kg {  /* Streamlit's sidebar class */
-            width: 14rem !important;
+        section[data-testid="stSidebar"] {
+            width: 12rem !important;
+            min-width: 12rem !important;
+            max-width: 12rem !important;
+        }
+
+        section[data-testid="stSidebar"] > div {
+            width: 12rem !important;
+            min-width: 12rem !important;
+            max-width: 12rem !important;
+        }
+
+        /* Make sidebar select boxes fit */
+        .stSelectbox > div > div {
+            min-width: 0 !important;
+            width: auto !important;
+            max-width: 10rem !important;
         }
 
         /* Container styling */
@@ -64,6 +79,7 @@ def apply_tradingview_style():
             overflow-wrap: break-word;
             word-wrap: break-word;
             word-break: break-word;
+            max-width: 100%;
         }
 
         .price-display {
@@ -77,14 +93,6 @@ def apply_tradingview_style():
         }
 
         .indicator-panel {
-            background-color: #2a2e39;
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid #363c4e;
-            margin-bottom: 1rem;
-        }
-
-        .news-panel {
             background-color: #2a2e39;
             padding: 1rem;
             border-radius: 8px;
@@ -108,11 +116,6 @@ def apply_tradingview_style():
 
         .stMarkdown {
             color: #d1d4dc;
-        }
-
-        /* SelectBox styling */
-        .stSelectbox > div > div {
-            max-width: 200px;
         }
         </style>
     """, unsafe_allow_html=True)
