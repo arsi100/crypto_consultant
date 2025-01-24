@@ -39,6 +39,7 @@ def apply_tradingview_style():
     """Apply TradingView-inspired dark theme"""
     st.markdown("""
         <style>
+        /* Basic theme colors */
         .main {
             color: #d1d4dc;
             background-color: #1e222d;
@@ -48,20 +49,31 @@ def apply_tradingview_style():
             background-color: #1e222d;
         }
 
+        /* Sidebar styling */
+        .css-1d391kg {  /* Streamlit's sidebar class */
+            width: 14rem !important;
+        }
+
+        /* Container styling */
         .tradingview-widget-container {
             background-color: #2a2e39;
             padding: 1rem;
             border-radius: 8px;
             margin-bottom: 1rem;
             border: 1px solid #363c4e;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
         }
 
-        .price-widget {
-            background-color: #2a2e39;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid #363c4e;
-            margin-bottom: 1rem;
+        .price-display {
+            font-size: 2rem;
+            margin: 0.5rem 0;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+            max-width: 100%;
+            display: inline-block;
         }
 
         .indicator-panel {
@@ -80,6 +92,7 @@ def apply_tradingview_style():
             margin-bottom: 1rem;
         }
 
+        /* Button styling */
         .stButton>button {
             background-color: #2962ff;
             color: white;
@@ -88,19 +101,18 @@ def apply_tradingview_style():
             border-radius: 4px;
         }
 
-        .plot-container {
-            background-color: #1e222d !important;
-            border: 1px solid #363c4e;
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
+        /* Text styling */
         h1, h2, h3 {
             color: #d1d4dc !important;
         }
 
         .stMarkdown {
             color: #d1d4dc;
+        }
+
+        /* SelectBox styling */
+        .stSelectbox > div > div {
+            max-width: 200px;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -145,23 +157,21 @@ def get_real_crypto_price(crypto):
         return None
 
 def display_price_widget(price_data, coin):
-    """Display current price in TradingView style"""
+    """Display current price in TradingView style with improved text wrapping"""
     if price_data:
         price = price_data['price']
         change = price_data['change_24h']
         color = "color: #26a69a" if change > 0 else "color: #ef5350"
 
         st.markdown(f"""
-        <div class="tradingview-widget-container" style="min-width: 300px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 1rem;">
-                <div style="width: 100%;">
-                    <h3 style="color: #d1d4dc; margin: 0;">{AVAILABLE_COINS[coin]['name']} ({coin})</h3>
-                    <div style="font-size: 2.5rem; margin: 0.5rem 0; {color}; word-wrap: break-word;">
-                        ${price:,.2f}
-                    </div>
-                    <div style="{color}">
-                        {change:+.2f}% (24h)
-                    </div>
+        <div class="tradingview-widget-container">
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <h3 style="color: #d1d4dc; margin: 0;">{AVAILABLE_COINS[coin]['name']} ({coin})</h3>
+                <div class="price-display" style="{color}">
+                    ${price:,.2f}
+                </div>
+                <div style="{color}">
+                    {change:+.2f}% (24h)
                 </div>
             </div>
         </div>
