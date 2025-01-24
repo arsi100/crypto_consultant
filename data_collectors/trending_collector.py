@@ -11,48 +11,58 @@ logger = logging.getLogger(__name__)
 
 class TrendingCollector:
     """Collects trending coin data from CoinGecko"""
-    
+
     def __init__(self):
-        self.api_key = os.environ.get('COINGECKO_API_KEY')
+        self.api_key = os.environ.get('COINGECKO_API_KEY', '').strip()
         if not self.api_key:
             logger.error("CoinGecko API key not found")
             raise ValueError("CoinGecko API key is required")
-            
+
     def fetch_trending_coins(self) -> Optional[List[Dict]]:
         """Fetch trending coins from CoinGecko API"""
         try:
             url = "https://api.coingecko.com/api/v3/search/trending"
             headers = {
-                'X-Cg-Api-Key': self.api_key
+                'x-cg-api-key': self.api_key  # Changed to lowercase
             }
-            
+
             response = requests.get(url, headers=headers, timeout=10)
-            
+
             if response.status_code == 429:
                 logger.error("CoinGecko API rate limit reached")
                 return None
             elif response.status_code == 401:
                 logger.error("Invalid CoinGecko API key")
                 return None
-                
+
             response.raise_for_status()
             data = response.json()
-            
+
+            # Ensure we have the expected data structure
+            if not isinstance(data, dict) or 'coins' not in data:
+                logger.error("Unexpected response format from CoinGecko API")
+                return None
+
             return data.get('coins', [])
-            
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching trending coins: {str(e)}")
             return None
-            
+
     def store_trending_coins(self, trending_data: List[Dict]) -> bool:
         """Store trending coins in the database"""
         try:
             with db.get_session() as session:
+                timestamp = datetime.utcnow()
+
                 for coin in trending_data:
                     coin_item = coin.get('item', {})
+                    if not coin_item.get('id') or not coin_item.get('symbol'):
+                        continue
+
                     trending_coin = TrendingCoin(
                         coin_id=coin_item.get('id'),
-                        symbol=coin_item.get('symbol').upper(),
+                        symbol=coin_item.get('symbol', '').upper(),
                         name=coin_item.get('name'),
                         market_cap_rank=coin_item.get('market_cap_rank'),
                         price_btc=coin_item.get('price_btc'),
@@ -63,17 +73,17 @@ class TrendingCollector:
                             'large': coin_item.get('large'),
                             'slug': coin_item.get('slug')
                         },
-                        timestamp=datetime.utcnow()
+                        timestamp=timestamp
                     )
                     session.add(trending_coin)
-                    
+
                 session.commit()
                 return True
-                
+
         except Exception as e:
             logger.error(f"Error storing trending coins: {str(e)}")
             return False
-            
+
     def get_latest_trending_coins(self, session: Session, limit: int = 10) -> List[TrendingCoin]:
         """Get the most recent trending coins from database"""
         try:

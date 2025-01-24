@@ -13,7 +13,7 @@ def get_crypto_news(symbol: str) -> List[Dict]:
     news_items = []
 
     # Get API key from environment
-    api_key = os.environ.get('COINGECKO_API_KEY')
+    api_key = os.environ.get('COINGECKO_API_KEY', '').strip()
     if not api_key:
         logger.error("CoinGecko API key not found in environment variables")
         return []
@@ -38,10 +38,10 @@ def get_crypto_news(symbol: str) -> List[Dict]:
         return []
 
     # CoinGecko API endpoint for news
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/status_updates"
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/news"
 
     headers = {
-        'X-Cg-Api-Key': api_key
+        'x-cg-api-key': api_key  # Changed to lowercase as per CoinGecko's requirements
     }
 
     try:
@@ -53,38 +53,24 @@ def get_crypto_news(symbol: str) -> List[Dict]:
         elif response.status_code == 401:
             logger.error("Invalid CoinGecko API key")
             return []
+        elif response.status_code == 404:
+            # Fallback to general news endpoint if coin-specific news not found
+            url = "https://api.coingecko.com/api/v3/news"
+            response = requests.get(url, headers=headers, timeout=10)
 
         response.raise_for_status()
         data = response.json()
 
-        # Process status updates (news)
-        for update in data.get('status_updates', [])[:10]:  # Limit to 10 most recent updates
+        # Process news items
+        for item in data[:10]:  # Limit to 10 most recent news items
             news_items.append({
-                'title': update.get('description', '').split('\n')[0],  # First line as title
-                'summary': update.get('description', ''),
-                'content': update.get('description', ''),
-                'url': update.get('project', {}).get('link', ''),
-                'published_at': update.get('created_at', ''),
-                'source': 'CoinGecko'
+                'title': item.get('title', ''),
+                'summary': item.get('description', ''),
+                'content': item.get('text', ''),
+                'url': item.get('url', ''),
+                'published_at': item.get('published_at', ''),
+                'source': item.get('author', 'CoinGecko')
             })
-
-        # If we have space for more news, fetch from the markets endpoint
-        if len(news_items) < 10:
-            market_url = "https://api.coingecko.com/api/v3/news"
-            market_response = requests.get(market_url, headers=headers, timeout=10)
-
-            if market_response.status_code == 200:
-                market_news = market_response.json()
-                for article in market_news[:10 - len(news_items)]:
-                    if coin_id.lower() in article.get('title', '').lower():
-                        news_items.append({
-                            'title': article.get('title', ''),
-                            'summary': article.get('description', ''),
-                            'content': article.get('text', ''),
-                            'url': article.get('url', ''),
-                            'published_at': article.get('published_at', ''),
-                            'source': article.get('author', 'CoinGecko')
-                        })
 
         return news_items
 

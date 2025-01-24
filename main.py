@@ -208,28 +208,42 @@ def display_trend_detection(price_analysis):
         # Show key price levels in a more friendly way
         if 'support_resistance' in price_analysis:
             sr_levels = price_analysis['support_resistance']
-            if isinstance(sr_levels.get('support'), (list, tuple)) and isinstance(sr_levels.get('resistance'), (list, tuple)):
-                st.markdown("""
-                <h4 style="color: #d1d4dc; margin-top: 1rem;">🎯 Key Price Points</h4>
-                """, unsafe_allow_html=True)
+            st.markdown("""
+            <h4 style="color: #d1d4dc; margin-top: 1rem;">🎯 Key Price Points</h4>
+            """, unsafe_allow_html=True)
 
-                support_levels = sr_levels['support']
-                resistance_levels = sr_levels['resistance']
+            if sr_levels and isinstance(sr_levels, dict):
+                if 'support' in sr_levels:
+                    support = sr_levels['support']
+                    if isinstance(support, (int, float)):
+                        st.markdown(f"""
+                        <div style="color: #26a69a; margin: 0.5rem 0;">
+                            Support Level: ${support:,.2f}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif isinstance(support, (list, tuple)) and support:
+                        for i, level in enumerate(support[:2]):  # Show top 2 support levels
+                            st.markdown(f"""
+                            <div style="color: #26a69a; margin: 0.5rem 0;">
+                                Support Level #{i+1}: ${level:,.2f}
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                # Only show the first two levels
-                for i, (support, resistance) in enumerate(zip(support_levels[:2], resistance_levels[:2])):
-                    st.markdown(f"""
-                    <div style="color: #d1d4dc; margin: 0.5rem 0;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Price Floor #{i+1}:</span>
-                            <span style="color: #26a69a">${support:,.2f}</span>
+                if 'resistance' in sr_levels:
+                    resistance = sr_levels['resistance']
+                    if isinstance(resistance, (int, float)):
+                        st.markdown(f"""
+                        <div style="color: #ef5350; margin: 0.5rem 0;">
+                            Resistance Level: ${resistance:,.2f}
                         </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Price Ceiling #{i+1}:</span>
-                            <span style="color: #ef5350">${resistance:,.2f}</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
+                    elif isinstance(resistance, (list, tuple)) and resistance:
+                        for i, level in enumerate(resistance[:2]):  # Show top 2 resistance levels
+                            st.markdown(f"""
+                            <div style="color: #ef5350; margin: 0.5rem 0;">
+                                Resistance Level #{i+1}: ${level:,.2f}
+                            </div>
+                            """, unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -378,11 +392,14 @@ def display_news_section(crypto):
         with st.spinner('Fetching latest news...'):
             news = get_crypto_news(crypto)
 
-            if news:
+            if news and isinstance(news, list) and len(news) > 0:
                 # Get sentiment analysis
                 sentiment = analyze_sentiment(news)
 
                 for item in news[:5]:  # Display top 5 news items
+                    if not isinstance(item, dict) or 'title' not in item:
+                        continue
+
                     # Determine sentiment icon
                     sentiment_color = (
                         "🟢" if item.get('sentiment') == 'positive'
@@ -400,9 +417,10 @@ def display_news_section(crypto):
                         </div>
                         """, unsafe_allow_html=True)
             else:
-                st.info("No recent news available. Please try again later.")
+                st.info("Unable to fetch news at the moment. Please try again later.")
+                logger.error(f"No news data returned for {crypto}")
     except Exception as e:
-        st.error(f"Unable to fetch news at the moment. Please try again later.")
+        st.error("Unable to fetch news at the moment. Please try again later.")
         logger.error(f"Error in display_news_section: {str(e)}")
 
 def chat_interface():
