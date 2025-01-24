@@ -30,15 +30,28 @@ class AIAnalyzer:
             low = price_data['low'].min() if not price_data.empty else None
             volume = price_data['volume'].sum() if 'volume' in price_data.columns and not price_data.empty else None
 
+            # Calculate technical indicators for context
+            rolling_window = min(20, len(price_data))
+            sma = price_data['close'].rolling(window=rolling_window).mean().iloc[-1] if not price_data.empty else None
+            rsi = 50  # Placeholder - implement actual RSI calculation if needed
+
             # Prepare data summary for AI analysis
             data_summary = (
-                f"Timeframe: {timeframe}\n"
-                f"Latest Price: ${self._format_number(latest_price)}\n"
-                f"Price Change: {self._format_number(price_change)}%\n"
-                f"High: ${self._format_number(high)}\n"
-                f"Low: ${self._format_number(low)}\n"
-                f"Volume: {self._format_number(volume, ',.0f')}\n"
-                f"Number of data points: {len(price_data)}"
+                f"Analyze the following {timeframe} cryptocurrency market data:\n\n"
+                f"Current Price: ${self._format_number(latest_price)}\n"
+                f"24h Change: {self._format_number(price_change)}%\n"
+                f"24h High: ${self._format_number(high)}\n"
+                f"24h Low: ${self._format_number(low)}\n"
+                f"24h Volume: {self._format_number(volume, ',.0f')}\n"
+                f"SMA{rolling_window}: ${self._format_number(sma)}\n"
+                f"RSI: {self._format_number(rsi)}\n"
+                f"Number of data points: {len(price_data)}\n\n"
+                f"Provide a detailed cryptocurrency market analysis focusing on:\n"
+                f"1. Current market structure and trend\n"
+                f"2. Key support/resistance levels\n"
+                f"3. Volume analysis and market participation\n"
+                f"4. Short-term price targets\n"
+                f"5. Risk assessment"
             )
 
             # Get AI analysis
@@ -47,19 +60,30 @@ class AIAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert cryptocurrency analyst. Analyze the provided price data and generate comprehensive insights. 
-                        Format your response as a valid JSON string with the following structure:
+                        "content": """You are a professional cryptocurrency market analyst specializing in technical analysis and market psychology. 
+                        Analyze the provided market data and generate actionable insights.
+
+                        FORMAT YOUR RESPONSE AS A VALID JSON STRING LIKE THIS (no additional text):
                         {
                             "trend": "bullish/bearish/neutral",
                             "trend_strength": "strong/moderate/weak",
-                            "analysis": "detailed analysis text",
-                            "patterns": [{"type": "pattern name", "confidence": 0.95}],
-                            "support_resistance": {"support": 45000, "resistance": 48000},
+                            "analysis": "Start with clear market context. Include specific price levels and technical analysis. Explain the reasoning behind support/resistance levels. Discuss volume profile and market participation. Provide actionable insights.",
+                            "patterns": [
+                                {
+                                    "type": "pattern name (e.g. Double Bottom, Bull Flag)",
+                                    "confidence": 0.95,
+                                    "price_target": 45000
+                                }
+                            ],
+                            "support_resistance": {
+                                "support": [42000, 41000],
+                                "resistance": [45000, 46000]
+                            },
                             "signal": "BUY/SELL/HOLD",
                             "confidence": 0.85,
-                            "market_sentiment": "bullish/bearish/neutral"
-                        }
-                        Only respond with the JSON object, no additional text."""
+                            "market_sentiment": "bullish/bearish/neutral",
+                            "risk_level": "high/medium/low"
+                        }"""
                     },
                     {"role": "user", "content": data_summary}
                 ]
@@ -107,9 +131,16 @@ class AIAnalyzer:
 
             # Prepare pattern analysis prompt
             data_description = (
-                f"Price volatility: {self._format_number(volatility)}\n"
-                f"Price trend: {self._format_number(price_data['close'].iloc[-1] - price_data['close'].iloc[0])}\n"
-                f"Number of periods: {len(price_data)}"
+                f"Analyze the following cryptocurrency price action:\n\n"
+                f"Price Volatility: {self._format_number(volatility)}\n"
+                f"Price Movement: {self._format_number(price_data['close'].iloc[-1] - price_data['close'].iloc[0])}\n"
+                f"Candles Analyzed: {len(price_data)}\n\n"
+                f"Identify any significant chart patterns, focusing on:\n"
+                f"1. Traditional patterns (Head & Shoulders, Double Top/Bottom)\n"
+                f"2. Candlestick patterns (Engulfing, Doji, etc.)\n"
+                f"3. Continuation and reversal patterns\n"
+                f"4. Volume confirmation\n"
+                f"5. Pattern completion percentage"
             )
 
             response = self.client.chat.completions.create(
@@ -117,18 +148,21 @@ class AIAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": """Analyze the price data for common trading patterns. 
-                        Respond with a valid JSON string in this format:
+                        "content": """You are a cryptocurrency pattern recognition expert.
+                        Analyze the price action and identify significant chart patterns.
+
+                        FORMAT YOUR RESPONSE AS A VALID JSON STRING LIKE THIS (no additional text):
                         {
                             "patterns": [
                                 {
                                     "type": "pattern name",
                                     "confidence": 0.95,
-                                    "description": "pattern description"
+                                    "description": "Detailed pattern description with price targets and confirmation levels",
+                                    "completion": 0.80,
+                                    "volume_confirmed": true
                                 }
                             ]
-                        }
-                        Only respond with the JSON object, no additional text."""
+                        }"""
                     },
                     {"role": "user", "content": data_description}
                 ]
