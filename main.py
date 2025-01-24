@@ -6,15 +6,15 @@ import os
 import time
 import json
 import logging
-import requests
 from data_collectors.price_collector import get_crypto_prices
 from data_collectors.news_collector import get_crypto_news
 from data_collectors.social_collector import get_social_data
-from data_collectors.trending_collector import TrendingCollector # Import added
+from data_collectors.trending_collector import TrendingCollector
 from analysis.price_analyzer import analyze_price_trends
 from analysis.sentiment_analyzer import analyze_sentiment
 from utils.email_sender import send_daily_report
 from utils.data_storage import store_analysis_results
+from database import db  # Add the missing import
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -38,11 +38,21 @@ def apply_tradingview_style():
     """Apply TradingView-inspired dark theme"""
     st.markdown("""
         <style>
-        .tradingview-widget-container {
+        .main {
+            color: #d1d4dc;
             background-color: #1e222d;
+        }
+
+        .stApp {
+            background-color: #1e222d;
+        }
+
+        .tradingview-widget-container {
+            background-color: #2a2e39;
             padding: 1rem;
             border-radius: 8px;
             margin-bottom: 1rem;
+            border: 1px solid #363c4e;
         }
 
         .price-widget {
@@ -50,6 +60,7 @@ def apply_tradingview_style():
             padding: 1.5rem;
             border-radius: 8px;
             border: 1px solid #363c4e;
+            margin-bottom: 1rem;
         }
 
         .indicator-panel {
@@ -81,6 +92,14 @@ def apply_tradingview_style():
             border: 1px solid #363c4e;
             border-radius: 8px;
             padding: 1rem;
+        }
+
+        h1, h2, h3 {
+            color: #d1d4dc !important;
+        }
+
+        .stMarkdown {
+            color: #d1d4dc;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -132,52 +151,131 @@ def display_price_widget(price_data, coin):
         color = "color: #26a69a" if change > 0 else "color: #ef5350"
 
         st.markdown(f"""
-        <div class="price-widget">
-            <h3 style="color: #d1d4dc; margin: 0;">{coin}</h3>
-            <div style="font-size: 2rem; {color}">
-                ${price:,.2f}
-            </div>
-            <div style="{color}">
-                {change:+.2f}%
+        <div class="tradingview-widget-container">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="color: #d1d4dc; margin: 0;">{AVAILABLE_COINS[coin]['name']} ({coin})</h3>
+                    <div style="font-size: 2rem; margin: 0.5rem 0; {color}">
+                        ${price:,.2f}
+                    </div>
+                    <div style="{color}">
+                        {change:+.2f}% (24h)
+                    </div>
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.error("Unable to fetch price data")
 
-def display_news_section(crypto):
-    """Display news with sentiment analysis"""
+def display_trend_detection(price_analysis):
+    """Display trend detection with pattern analysis in a more informal way"""
+    if price_analysis:
+        trend = price_analysis.get('trend', 'unknown').title()
+        trend_strength = price_analysis.get('trend_strength', 'unknown').title()
+        confidence = price_analysis.get('confidence', 0) * 100
+
+        # More informal market analysis
+        st.markdown("""
+        <div class="tradingview-widget-container">
+            <h4 style="color: #d1d4dc;">💡 Quick Market Take</h4>
+        """, unsafe_allow_html=True)
+
+        analysis = price_analysis.get('analysis', '')
+        # Make the analysis more conversational
+        analysis = analysis.replace('market structure', 'market behavior')
+        analysis = analysis.replace('technical analysis', 'market signals')
+
+        st.markdown(f"""
+            <div style="color: #d1d4dc; margin-bottom: 1rem;">
+                {analysis}
+            </div>
+        """, unsafe_allow_html=True)
+
+        if price_analysis.get('patterns'):
+            st.markdown("""
+            <h4 style="color: #d1d4dc; margin-top: 1rem;">📊 Chart Patterns</h4>
+            """, unsafe_allow_html=True)
+
+            for pattern in price_analysis['patterns'][:3]:
+                confidence = pattern.get('confidence', 0) * 100
+                st.markdown(f"""
+                <div style="color: #d1d4dc; margin: 0.5rem 0;">
+                    • {pattern['type'].replace('_', ' ').title()}: {confidence:.0f}% confidence
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Add support/resistance levels
+        if 'support_resistance' in price_analysis:
+            sr_levels = price_analysis['support_resistance']
+            if isinstance(sr_levels.get('support'), (list, tuple)):
+                support_levels = sr_levels['support']
+                resistance_levels = sr_levels['resistance']
+
+                st.markdown("""
+                <h4 style="color: #d1d4dc; margin-top: 1rem;">🎯 Key Price Levels</h4>
+                """, unsafe_allow_html=True)
+
+                for i, (support, resistance) in enumerate(zip(support_levels, resistance_levels)):
+                    st.markdown(f"""
+                    <div style="color: #d1d4dc;">
+                        Support #{i+1}: ${support:,.2f}
+                        <br>
+                        Resistance #{i+1}: ${resistance:,.2f}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def display_trending_coins():
+    """Display trending coins section"""
+    st.markdown("### 🔥 Trending Coins")
+
     try:
-        # Add loading state
-        with st.spinner('Fetching latest news...'):
-            news = get_crypto_news(crypto)
+        # Initialize trending collector
+        trending_collector = TrendingCollector()
 
-            if news:
-                # Get sentiment analysis
-                sentiment = analyze_sentiment(news)
+        # Add refresh button
+        if st.button("🔄 Refresh Trending", key="refresh_trending"):
+            with st.spinner("Updating trending coins..."):
+                if trending_collector.update_trending_coins():
+                    st.success("Trending coins updated!")
+                else:
+                    st.error("Failed to update trending coins")
 
-                for item in news[:5]:  # Display top 5 news items
-                    # Determine sentiment icon
-                    sentiment_color = (
-                        "🟢" if item.get('sentiment') == 'positive'
-                        else "🔴" if item.get('sentiment') == 'negative'
-                        else "⚪"
-                    )
+        # Get trending coins using a database session
+        with db.get_session() as session:
+            trending_coins = trending_collector.get_latest_trending_coins(session)
 
-                    with st.expander(f"{sentiment_color} {item['title']}"):
-                        st.markdown(f"""
-                        <div style='color: #d1d4dc;'>
-                            {item.get('summary', 'No summary available')}
-                            <br><br>
-                            <small>Source: {item.get('source', 'Unknown')} • 
-                            Published: {item.get('published_at', 'N/A')}</small>
-                        </div>
-                        """, unsafe_allow_html=True)
+            if trending_coins:
+                for coin in trending_coins:
+                    with st.expander(f"#{coin.market_cap_rank} {coin.name} ({coin.symbol})", expanded=False):
+                        col1, col2 = st.columns([1, 3])
+
+                        with col1:
+                            if coin.coin_metadata and 'small' in coin.coin_metadata:
+                                st.image(coin.coin_metadata['small'], width=50)
+
+                        with col2:
+                            st.markdown(f"""
+                            <div class="tradingview-widget-container">
+                                <div style="color: #d1d4dc;">
+                                    <strong>Market Cap Rank:</strong> {coin.market_cap_rank if coin.market_cap_rank else 'N/A'}
+                                    <br>
+                                    <strong>Price (BTC):</strong> {coin.price_btc:.8f} BTC
+                                    <br>
+                                    <strong>Trending Score:</strong> {coin.score}
+                                    <br>
+                                    <strong>Last Updated:</strong> {coin.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
             else:
-                st.info("No recent news available. Please try again later.")
+                st.info("No trending coins available. Click refresh to fetch the latest trends.")
+
     except Exception as e:
-        st.error(f"Unable to fetch news at the moment. Please try again later.")
-        logger.error(f"Error in display_news_section: {str(e)}")
+        logger.error(f"Error in trending coins section: {str(e)}")
+        st.error("Unable to load trending coins at the moment")
 
 def create_candlestick_chart(prices, coin, timeframe):
     """Create an interactive candlestick chart"""
@@ -258,31 +356,39 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
 
-def display_trend_detection(price_analysis):
-    """Display trend detection with pattern analysis"""
-    if price_analysis and price_analysis.get('patterns'):
-        patterns_html = "".join([
-            f"• {pattern['type'].replace('_', ' ').title()}: {pattern.get('confidence', 0)*100:.0f}% confidence<br/>"
-            for pattern in price_analysis['patterns'][:3]
-        ])
+def display_news_section(crypto):
+    """Display news with sentiment analysis"""
+    try:
+        # Add loading state
+        with st.spinner('Fetching latest news...'):
+            news = get_crypto_news(crypto)
 
-        trend = price_analysis.get('trend', 'unknown').title()
-        trend_strength = price_analysis.get('trend_strength', 'unknown').title()
+            if news:
+                # Get sentiment analysis
+                sentiment = analyze_sentiment(news)
 
-        st.markdown(f"""
-        <div class="indicator-panel">
-            <h4 style="color: #d1d4dc;">Emerging Patterns</h4>
-            <div style="color: #d1d4dc;">
-                {patterns_html if patterns_html else "No patterns detected"}
-            </div>
-            <div style="margin-top: 1rem;">
-                <h4 style="color: #d1d4dc;">Current Trend</h4>
-                <div style="color: #d1d4dc;">
-                    {trend_strength} {trend}
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+                for item in news[:5]:  # Display top 5 news items
+                    # Determine sentiment icon
+                    sentiment_color = (
+                        "🟢" if item.get('sentiment') == 'positive'
+                        else "🔴" if item.get('sentiment') == 'negative'
+                        else "⚪"
+                    )
+
+                    with st.expander(f"{sentiment_color} {item['title']}"):
+                        st.markdown(f"""
+                        <div style='color: #d1d4dc;'>
+                            {item.get('summary', 'No summary available')}
+                            <br><br>
+                            <small>Source: {item.get('source', 'Unknown')} • 
+                            Published: {item.get('published_at', 'N/A')}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No recent news available. Please try again later.")
+    except Exception as e:
+        st.error(f"Unable to fetch news at the moment. Please try again later.")
+        logger.error(f"Error in display_news_section: {str(e)}")
 
 def chat_interface():
     """Display chat interface for user queries"""
@@ -318,48 +424,6 @@ def chat_interface():
             st.warning("Please select a cryptocurrency first to get analysis.")
 
 
-def display_trending_coins():
-    """Display trending coins section"""
-    st.markdown("### 🔥 Trending Coins")
-
-    try:
-        trending_collector = TrendingCollector()
-
-        # Update trending coins data
-        if st.button("🔄 Refresh Trending"):
-            with st.spinner("Updating trending coins..."):
-                if trending_collector.update_trending_coins():
-                    st.success("Trending coins updated!")
-                else:
-                    st.error("Failed to update trending coins")
-
-        # Display trending coins from database
-        with db.get_session() as session: # Assumes db is defined elsewhere
-            trending_coins = trending_collector.get_latest_trending_coins(session)
-
-            if trending_coins:
-                for coin in trending_coins:
-                    with st.expander(f"#{coin.market_cap_rank} {coin.name} ({coin.symbol})", expanded=False):
-                        col1, col2 = st.columns([1, 3])
-
-                        with col1:
-                            if coin.coin_metadata and 'small' in coin.coin_metadata:
-                                st.image(coin.coin_metadata['small'], width=50)
-
-                        with col2:
-                            st.markdown(f"""
-                            **Market Cap Rank:** {coin.market_cap_rank if coin.market_cap_rank else 'N/A'}  
-                            **Price (BTC):** {coin.price_btc:.8f} BTC  
-                            **Trending Score:** {coin.score}  
-                            **Last Updated:** {coin.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
-                            """)
-            else:
-                st.info("No trending coins data available. Click refresh to fetch the latest trends.")
-
-    except Exception as e:
-        logger.error(f"Error in trending coins section: {str(e)}")
-        st.error("Unable to load trending coins at the moment")
-
 def main():
     st.set_page_config(layout="wide", page_title="CryptoAI Platform", page_icon="📈")
     apply_tradingview_style()
@@ -378,7 +442,7 @@ def main():
     # Sidebar controls
     with st.sidebar:
         st.title("📊 Controls")
-        coin_options = {f"{symbol} - {info['name']}": symbol 
+        coin_options = {f"{symbol} - {info['name']}": symbol
                       for symbol, info in AVAILABLE_COINS.items()}
         selected_display = st.selectbox(
             "Select Cryptocurrency",
