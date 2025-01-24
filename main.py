@@ -7,6 +7,14 @@ import time
 import json
 import logging
 import requests
+from data_collectors.price_collector import get_crypto_prices
+from data_collectors.news_collector import get_crypto_news
+from data_collectors.social_collector import get_social_data
+from data_collectors.trending_collector import TrendingCollector # Import added
+from analysis.price_analyzer import analyze_price_trends
+from analysis.sentiment_analyzer import analyze_sentiment
+from utils.email_sender import send_daily_report
+from utils.data_storage import store_analysis_results
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -210,7 +218,6 @@ def display_price_chart(coin, timeframe):
         st.error(f"Error displaying chart: {str(e)}")
 
 
-
 def generate_daily_report(crypto, trends, news, sentiment):
     """Generates and handles report data"""
     try:
@@ -250,14 +257,6 @@ def json_serial(obj):
     if isinstance(obj, (datetime, pd.Timestamp)):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
-
-from data_collectors.price_collector import get_crypto_prices
-from data_collectors.news_collector import get_crypto_news
-from data_collectors.social_collector import get_social_data
-from analysis.price_analyzer import analyze_price_trends
-from analysis.sentiment_analyzer import analyze_sentiment
-from utils.email_sender import send_daily_report
-from utils.data_storage import store_analysis_results
 
 def display_trend_detection(price_analysis):
     """Display trend detection with pattern analysis"""
@@ -317,6 +316,49 @@ def chat_interface():
             st.session_state.chat_history.append((user_question, response))
         else:
             st.warning("Please select a cryptocurrency first to get analysis.")
+
+
+def display_trending_coins():
+    """Display trending coins section"""
+    st.markdown("### 🔥 Trending Coins")
+
+    try:
+        trending_collector = TrendingCollector()
+
+        # Update trending coins data
+        if st.button("🔄 Refresh Trending"):
+            with st.spinner("Updating trending coins..."):
+                if trending_collector.update_trending_coins():
+                    st.success("Trending coins updated!")
+                else:
+                    st.error("Failed to update trending coins")
+
+        # Display trending coins from database
+        with db.get_session() as session: # Assumes db is defined elsewhere
+            trending_coins = trending_collector.get_latest_trending_coins(session)
+
+            if trending_coins:
+                for coin in trending_coins:
+                    with st.expander(f"#{coin.market_cap_rank} {coin.name} ({coin.symbol})", expanded=False):
+                        col1, col2 = st.columns([1, 3])
+
+                        with col1:
+                            if coin.coin_metadata and 'small' in coin.coin_metadata:
+                                st.image(coin.coin_metadata['small'], width=50)
+
+                        with col2:
+                            st.markdown(f"""
+                            **Market Cap Rank:** {coin.market_cap_rank if coin.market_cap_rank else 'N/A'}  
+                            **Price (BTC):** {coin.price_btc:.8f} BTC  
+                            **Trending Score:** {coin.score}  
+                            **Last Updated:** {coin.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
+                            """)
+            else:
+                st.info("No trending coins data available. Click refresh to fetch the latest trends.")
+
+    except Exception as e:
+        logger.error(f"Error in trending coins section: {str(e)}")
+        st.error("Unable to load trending coins at the moment")
 
 def main():
     st.set_page_config(layout="wide", page_title="CryptoAI Platform", page_icon="📈")
@@ -426,6 +468,10 @@ def main():
     with news_col:
         st.markdown("### Latest News")
         display_news_section(st.session_state.current_coin)
+
+    # Add Trending Coins Section
+    st.markdown("---")
+    display_trending_coins()
 
     # Market Intelligence Section
     st.markdown("---")
