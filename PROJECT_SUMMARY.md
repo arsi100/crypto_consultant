@@ -3,7 +3,7 @@
 ## Project Overview
 An advanced AI-powered cryptocurrency research platform that provides comprehensive market insights through intelligent data aggregation, analysis, and visualization.
 
-## Project Structure
+## Code Structure
 ```
 ├── analysis/
 │   ├── ai_analyzer.py          # AI-powered market analysis using OpenAI

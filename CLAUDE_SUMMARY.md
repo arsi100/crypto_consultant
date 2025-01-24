@@ -11,25 +11,6 @@ Technical Stack:
 - Python-based backend with advanced data processing capabilities
 - OpenAI integration for market intelligence and trend analysis
 
-## Directory Structure
-```
-├── analysis/
-│   ├── ai_analyzer.py          # AI-powered market analysis using OpenAI
-│   ├── pattern_recognition.py  # Technical pattern detection
-│   ├── price_analyzer.py       # Price trend analysis
-│   └── sentiment_analyzer.py   # News sentiment analysis
-├── data_collectors/
-│   ├── news_collector.py       # Crypto news aggregation
-│   ├── price_collector.py      # Real-time price data collection
-│   ├── social_collector.py     # Social media sentiment
-│   └── trending_collector.py   # Trending coins tracking
-├── utils/
-│   ├── data_storage.py        # Analysis results storage
-│   └── email_sender.py        # Report delivery system
-├── main.py                    # Main Streamlit application
-└── models.py                  # Database models
-```
-
 ## Current Issues Being Fixed
 
 1. Market Overview Section
