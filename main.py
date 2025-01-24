@@ -589,10 +589,23 @@ def main():
 
             if 'support_resistance' in st.session_state.price_analysis:
                 sr_levels = st.session_state.price_analysis['support_resistance']
-                if sr_levels['support']:
-                    st.write(f"Support level: ${sr_levels['support']:,.2f}")
-                if sr_levels['resistance']:
-                    st.write(f"Resistance level: ${sr_levels['resistance']:,.2f}")
+                if sr_levels.get('support'):
+                    support = sr_levels['support']
+                    # Handle both single value and list of values
+                    if isinstance(support, (int, float)):
+                        st.write(f"Support level: ${support:,.2f}")
+                    elif isinstance(support, (list, tuple)) and support:
+                        for i, level in enumerate(support[:2]):
+                            st.write(f"Support level #{i+1}: ${float(level):,.2f}")
+
+                if sr_levels.get('resistance'):
+                    resistance = sr_levels['resistance']
+                    # Handle both single value and list of values
+                    if isinstance(resistance, (int, float)):
+                        st.write(f"Resistance level: ${resistance:,.2f}")
+                    elif isinstance(resistance, (list, tuple)) and resistance:
+                        for i, level in enumerate(resistance[:2]):
+                            st.write(f"Resistance level #{i+1}: ${float(level):,.2f}")
 
             st.markdown("</div>", unsafe_allow_html=True)
 
