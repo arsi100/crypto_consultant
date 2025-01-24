@@ -3,10 +3,11 @@ import numpy as np
 from typing import Dict
 import time
 from analysis.pattern_recognition import analyze_patterns
+from analysis.ai_analyzer import AIAnalyzer
 
-def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
+def analyze_price_trends(price_data: pd.DataFrame, timeframe: str = '24h') -> Dict:
     """
-    Analyze price trends using technical indicators and provide detailed analysis
+    Analyze price trends using both AI and technical indicators
     """
     default_response = {
         'trend': 'unknown',
@@ -32,7 +33,13 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
     }
 
     try:
-        # Calculate basic technical indicators
+        # Initialize AI analyzer
+        ai_analyzer = AIAnalyzer()
+
+        # Get AI analysis
+        ai_analysis = ai_analyzer.analyze_price_data(price_data, timeframe)
+
+        # Calculate technical indicators as backup and supplementary data
         close_prices = price_data['close']
 
         # Simple Moving Averages
@@ -60,68 +67,15 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
         current_macd = macd.iloc[-1]
         current_signal = signal.iloc[-1]
 
-        # Pattern Recognition
+        # Get pattern analysis
         pattern_analysis = analyze_patterns(price_data)
 
-        # Determine trend and momentum
-        price_change = ((current_price - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
-
-        # Trend analysis
-        trend = 'unknown'
-        trend_strength = 'unknown'
-        confidence = 0.0
-        signal = 'HOLD'
-
-        if not pd.isna(current_sma_20) and not pd.isna(current_sma_50):
-            price_deviation = abs(current_price - current_sma_20) / current_sma_20
-            trend_strength = 'strong' if price_deviation > 0.02 else 'moderate'
-
-            if current_price > current_sma_20 > current_sma_50:
-                trend = 'bullish'
-                confidence = min(price_deviation * 5, 0.95)
-                signal = 'BUY' if price_deviation > 0.03 else 'HOLD'
-            elif current_price < current_sma_20 < current_sma_50:
-                trend = 'bearish'
-                confidence = min(price_deviation * 5, 0.95)
-                signal = 'SELL' if price_deviation > 0.03 else 'HOLD'
-            else:
-                trend = 'sideways'
-                confidence = 0.5
-                signal = 'HOLD'
-
-        # Generate analysis text
-        analysis = f"The market is showing a {trend_strength} {trend} trend"
-
-        if price_change != 0:
-            analysis += f" with {abs(price_change):.2f}% {'increase' if price_change > 0 else 'decrease'}"
-
-        if not pd.isna(current_rsi):
-            if current_rsi > 70:
-                analysis += ". Market is currently overbought (RSI > 70)"
-                if trend == 'bullish':
-                    analysis += ". Consider taking profits"
-            elif current_rsi < 30:
-                analysis += ". Market is currently oversold (RSI < 30)"
-                if trend == 'bearish':
-                    analysis += ". Watch for potential reversal"
-
-        if not pd.isna(current_macd) and not pd.isna(current_signal):
-            if current_macd > current_signal:
-                analysis += ". MACD indicates bullish momentum"
-            else:
-                analysis += ". MACD suggests bearish pressure"
-
-        # Add pattern analysis
-        if pattern_analysis['patterns']:
-            analysis += "\nDetected patterns:"
-            for pattern in pattern_analysis['patterns'][:2]:
-                analysis += f"\n• {pattern['description']}"
-
+        # Combine AI and traditional analysis
         result = {
-            'trend': trend,
-            'trend_strength': trend_strength,
-            'signal': signal,
-            'confidence': confidence,
+            'trend': ai_analysis.get('trend', 'unknown'),
+            'trend_strength': ai_analysis.get('trend_strength', 'unknown'),
+            'signal': ai_analysis.get('signal', 'HOLD'),
+            'confidence': ai_analysis.get('confidence', 0.0),
             'indicators': {
                 'sma_20': float(current_sma_20) if not pd.isna(current_sma_20) else None,
                 'sma_50': float(current_sma_50) if not pd.isna(current_sma_50) else None,
@@ -131,13 +85,13 @@ def analyze_price_trends(price_data: pd.DataFrame) -> Dict:
             },
             'patterns': pattern_analysis['patterns'],
             'bollinger_bands': pattern_analysis['bollinger_bands'],
-            'support_resistance': {
-                'support': float(pattern_analysis['bollinger_bands']['lower']) if pattern_analysis['bollinger_bands'] else None,
-                'resistance': float(pattern_analysis['bollinger_bands']['upper']) if pattern_analysis['bollinger_bands'] else None
-            },
-            'analysis': analysis,
-            'price_change_percent': float(price_change),
-            'market_sentiment': 'Bullish' if trend == 'bullish' else 'Bearish' if trend == 'bearish' else 'Neutral'
+            'support_resistance': ai_analysis.get('support_resistance', {
+                'support': pattern_analysis['bollinger_bands']['lower'] if pattern_analysis['bollinger_bands'] else None,
+                'resistance': pattern_analysis['bollinger_bands']['upper'] if pattern_analysis['bollinger_bands'] else None
+            }),
+            'analysis': ai_analysis.get('analysis', 'Analysis not available'),
+            'price_change_percent': float(ai_analysis.get('price_change_percent', 0.0)),
+            'market_sentiment': ai_analysis.get('market_sentiment', 'Neutral')
         }
 
         return result
